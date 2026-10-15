@@ -4,13 +4,12 @@ import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from camera_traps.db.base import Base
-from camera_traps.db.domain import DBInterface
+from camera_traps.db.models import Base
 
 ModelType = TypeVar("ModelType", bound=Base)
 
 
-class PostgresHandler(DBInterface):
+class PostgresHandler:
     """PostgreSQL database handler implementation."""
 
     def __init__(self, db_user: str, db_password: str, db_host: str, db_port: str, db_name: str):

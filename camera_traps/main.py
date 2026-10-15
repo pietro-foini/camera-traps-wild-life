@@ -5,9 +5,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from trackers import SORTTracker
 
-from camera_traps.api.routes import home_router, image_router, video_router
+from camera_traps.api.routes import image_router, video_router
 from camera_traps.db.postgres import PostgresHandler
 from camera_traps.settings import S
+from camera_traps.storage.s3 import S3Storage
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,6 +27,15 @@ async def lifespan(app: FastAPI):
     )
     db.init_db()
     app.state.db = db
+
+    # Storage initialization.
+    storage = S3Storage(
+        endpoint_url=S.S3_ENDPOINT_URL,
+        aws_access_key_id=S.S3_SECRET_KEY,
+        aws_secret_access_key=S.S3_ACCESS_KEY,
+    )
+    storage.init_storage(buckets=[S.S3_BUCKET], folders=["input", "output"])
+    app.state.storage = storage
 
     # Tracker initialization.
     tracker = SORTTracker()
@@ -75,6 +85,5 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Camera Traps Wildlife", lifespan=lifespan)
 
 # Include API routes.
-app.include_router(home_router, tags=["Home"])
 app.include_router(image_router, tags=["Image"])
 app.include_router(video_router, tags=["Video"])

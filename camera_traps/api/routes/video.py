@@ -1,55 +1,59 @@
-import base64
-from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, HTTPException
+from trackers import SORTTracker
 
+from camera_traps.api.dependencies import get_classifier, get_db, get_detector, get_storage, get_tracker
+from camera_traps.api.schemas import SeaweedWebhookEvent
 from camera_traps.db.models import VideoInputModel, VideoOutputModel
+from camera_traps.db.postgres import PostgresHandler
+from camera_traps.errors import StorageException
+from camera_traps.models.domain import Predictor
+from camera_traps.models.models import VideoDetectionResponse
 from camera_traps.services.video import annotate, process, smooth
 from camera_traps.settings import S
+from camera_traps.storage.s3 import S3Storage
 
 video_router = APIRouter()
 
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent.parent / "templates"))
 
+@video_router.post(path="/predict-video", response_model=VideoDetectionResponse, status_code=200)
+def predict_video(
+    message: SeaweedWebhookEvent,
+    db: Annotated[PostgresHandler, Depends(get_db)],
+    detector: Annotated[Predictor, Depends(get_detector)],
+    classifier: Annotated[Predictor, Depends(get_classifier)],
+    storage: Annotated[S3Storage, Depends(get_storage)],
+    tracker: Annotated[SORTTracker, Depends(get_tracker)],
+):
+    if (
+        message.event_type != "create"
+        or message.message.new_entry.is_directory
+        or not message.message.new_entry.attributes.mime.startswith("video/")
+    ):
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid video.")
 
-@video_router.post(path="/predict-video", response_class=HTMLResponse)
-def predict_video(request: Request, file: UploadFile = File(...)):
-
-    if not file.filename or not file.content_type or not file.content_type.startswith("video/"):
-        return HTMLResponse(content="Uploaded file is not a valid video.", status_code=400)
-
-    video_record = VideoInputModel(filename=file.filename)
-    saved_video = request.app.state.db.add_record(video_record)
+    video_record = VideoInputModel(filename=message.s3_uri)
+    saved_video = db.add_record(video_record)
 
     # Read video file.
     try:
-        video_bytes = file.file.read()
-    finally:
-        file.file.close()
+        video_bytes = storage.download(message.s3_uri)
+    except StorageException as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Get the predictions.
     response = process(
-        filename=file.filename,
+        filename=message.s3_uri,
         video_bytes=video_bytes,
-        detector=request.app.state.detector,
-        classifier=request.app.state.classifier,
-        tracker=request.app.state.tracker,
+        detector=detector,
+        classifier=classifier,
+        tracker=tracker,
         detector_threshold=S.DETECTOR_THRESHOLD,
     )
 
     if not response.predictions:
-        return templates.TemplateResponse(
-            name="partials/video_result.html",
-            request=request,
-            context={
-                "filename": file.filename,
-                "has_detections": False,
-                "video_b64": "data:video/mp4;base64," + base64.b64encode(video_bytes).decode("utf-8"),
-                "summary": [],
-            },
-        )
+        return VideoDetectionResponse(filename=message.s3_uri, predictions=[])
 
     # Consolidate predictions.
     response = smooth(response=response, threshold=S.CLASSIFIER_THRESHOLD)
@@ -67,24 +71,16 @@ def predict_video(request: Request, file: UploadFile = File(...)):
             x_max=pred.box.xmax,
             y_max=pred.box.ymax,
         )
-        request.app.state.db.add_record(detection_record)
+        db.add_record(detection_record)
 
     # Render annotated video.
     video_bytes_output = annotate(video_bytes=video_bytes, response=response)
 
-    # Generate distinct track summary list da response.predictions.
-    seen_trackers = {}
-    for pred in response.predictions:
-        if pred.tracking_id not in seen_trackers:
-            seen_trackers[pred.tracking_id] = pred.class_name
-
-    return templates.TemplateResponse(
-        name="partials/video_result.html",
-        request=request,
-        context={
-            "filename": file.filename,
-            "has_detections": True,
-            "video_b64": "data:video/mp4;base64," + base64.b64encode(video_bytes_output).decode("utf-8"),
-            "summary": [{"tracker_id": tid, "label": label} for tid, label in sorted(seen_trackers.items())],
-        },
+    storage.upload(
+        key=f"output/{message.message.new_entry.name}",
+        data=video_bytes_output,
+        bucket=S.S3_BUCKET,
+        content_type="video/mp4",
     )
+
+    return response

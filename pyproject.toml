@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "camera-traps-wild-life"
-version = "1.0.9"
+version = "2.0.0"
 description = "Machine Learning-powered camera trap wildlife"
 authors = ["PFoini <pietro.foini1@gmail.com>"]
 readme = "README.md"
@@ -11,8 +11,6 @@ python = ">=3.11,<3.13"
 # Web App & API
 uvicorn = "0.52.4"
 fastapi = "0.141.1"
-python-multipart = "0.0.32"
-jinja2 = "3.1.6"
 # Data Processing & Config
 numpy = "2.4.6"
 pydantic = "2.13.5"
@@ -22,6 +20,8 @@ trackers = "2.6.0"
 supervision = "0.30.2"
 av = "18.1.0"
 ai-edge-litert = "2.2.0"
+# Storage
+boto3 = "1.43.114"
 # Database & ORM
 SQLAlchemy = "2.0.52"
 psycopg2-binary = "2.9.13"
