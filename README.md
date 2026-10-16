@@ -54,19 +54,18 @@ You can run this project locally either using **Docker Compose** (for a quick co
    You can store these files anywhere on your machine; we will refer to this directory as `/path/to/your/local/models` 
    in the following steps.
 
-2. Create an environment file anywhere on your machine; we will refer to this file as `/path/to/your/local/env`.
+2. Create an environment file anywhere on your machine; we will refer to this file as `/path/to/your/local/env`. At this 
+   point we can start adding the paths to the previously downloaded models. Example:
+
+    ```
+    CLASSIFIER_MODEL_PATH=/path/to/your/local/models/classifier.tflite
+    DETECTOR_MODEL_PATH=/path/to/your/local/models/detector.tflite
+    ```
 
 ### Manual Setup
 
 Follow these steps if you want to set up the development environment, external services, and dependencies natively on 
-your system without Docker. First of all, add to the environment file the paths to the previously downloaded models:
-
-Example:
-
-```
-CLASSIFIER_MODEL_PATH=/path/to/your/local/models/classifier.tflite
-DETECTOR_MODEL_PATH=/path/to/your/local/models/detector.tflite
-```
+your system without Docker.
 
 #### Python Dependencies
 
@@ -133,12 +132,10 @@ DB_NAME=cameratraps
 
 #### Storage
 
-Object storage is provided by [SeaweedFS](https://github.com/seaweedfs/seaweedfs), which exposes an S3-compatible API 
-and runs as a single executable.
+Object storage is provided by [SeaweedFS](https://github.com/seaweedfs/seaweedfs), which exposes an S3-compatible API and runs as a single executable.
 
 - Download the release for your operating system from the
-  [official releases page](https://github.com/seaweedfs/seaweedfs/releases) and extract the `weed` executable into a 
-  folder of your choice.
+  [official releases page](https://github.com/seaweedfs/seaweedfs/releases) and extract the `weed` executable into a folder of your choice.
 - Add that folder to your system `PATH`.
 - Create a directory where the data will be stored (e.g. `./seaweedfs-data`).
 
@@ -179,7 +176,7 @@ With **PostgreSQL** and **SeaweedFS** running in the background, start the appli
    uvicorn camera_traps.main:app --env-file /path/to/your/local/env --reload
    ```
 
-The Application will be available at http://localhost:8000
+The Application will be available at http://localhost:8000.
   
 ### Docker Setup
 
@@ -221,7 +218,7 @@ Once the containers are running:
 ## How It Works 
 
 The entire infrastructure is designed around an **event-driven pipeline**: whenever a new video (or image, if you modify 
-the configuration) is uploaded to the `input/` folder inside thetarget  bucket, SeaweedFS automatically triggers the inference 
+the configuration) is uploaded to the `input/` folder inside the target  bucket, SeaweedFS automatically triggers the inference 
 pipeline by sending an HTTP `POST` notification to the application's `/predict-video` endpoint.
 
 This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
