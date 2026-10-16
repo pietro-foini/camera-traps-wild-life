@@ -8,14 +8,28 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
       POSTGRES_DB: ${DB_NAME:-camera_traps}
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-camera_traps}" ]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: camera_traps_storage
+    restart: always
+    environment:
+      - WEED_NOTIFICATION_WEBHOOK_ENDPOINT=http://app:8000/predict-video
+    ports:
+      - "8888:8888"
+      - "8333:8333"
+    command: "server -ip=seaweedfs -filer -s3 -dir=/data -volume.max=30"
+    volumes:
+      - ./notification.toml:/etc/seaweedfs/notification.toml:ro
+      - seaweed_data:/data
 
   app:
     build:
@@ -29,11 +43,15 @@ services:
       - ${ENV_FILE:-.env}
     environment:
       - DB_HOST=postgres_db
+      - S3_ENDPOINT_URL=http://seaweedfs:8333
     volumes:
       - ${MODELS_DIR:-./models}:/app/models
     depends_on:
       postgres_db:
         condition: service_healthy
+      seaweedfs:
+        condition: service_started
 
 volumes:
   postgres_data:
+  seaweed_data:

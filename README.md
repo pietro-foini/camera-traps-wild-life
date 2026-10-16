@@ -38,12 +38,41 @@ Using Grad-CAM, we achieve model explainability to observe where the model focus
   <em>These images were retrieved from the <a href="https://emammal.si.edu/">eMammals</a> website in reference to the Tierschnappschuss Project based on camera trap locations in Italy.</em>
 </p>
 
-## Installation
+## Getting Started
+
+You can run this project locally either using **Docker Compose** (for a quick containerized setup) or through a 
+**Manual Setup** directly on your host machine.
+
+### Prerequisites
+
+1. Before starting the application in both scenarios, download the required pre-trained model weights from the 
+   [GitHub Releases](https://github.com/pietro-foini/Camera-traps-wild-life/releases) page of this repository:
+   
+   - **Object Detection:** MegaDetector v1000 model weights.
+   - **Classification:** Fine-tuned ConvNeXtBase model weights.
+
+   You can store these files anywhere on your machine; we will refer to this directory as `/path/to/your/local/models` 
+   in the following steps.
+
+2. Create an environment file anywhere on your machine; we will refer to this file as `/path/to/your/local/env`. At this 
+   point we can start adding the paths to the previously downloaded models. Example:
+
+    ```
+    CLASSIFIER_MODEL_PATH=/path/to/your/local/models/classifier.tflite
+    DETECTOR_MODEL_PATH=/path/to/your/local/models/detector.tflite
+    ```
+
+### Manual Setup
+
+Follow these steps if you want to set up the development environment, external services, and dependencies natively on 
+your system without Docker.
+
+#### Python Dependencies
 
 This project requires Python 3.11 or 3.12 and relies on Poetry for dependency management. The project is structured to 
 support three distinct installation modes depending on your hardware and requirements.
 
-### Lite Setup
+##### Lite Setup
 
 This setup is designed for edge deployments or lightweight servers where inference is handled exclusively via TensorFlow 
 Lite models, resulting in a significantly smaller storage footprint.
@@ -52,7 +81,7 @@ Lite models, resulting in a significantly smaller storage footprint.
 poetry install --only main
 ```
 
-### GPU Setup
+##### GPU Setup
 
 This setup is designed for development, training, or production inference on machines equipped with NVIDIA GPUs.
 
@@ -60,7 +89,7 @@ This setup is designed for development, training, or production inference on mac
 poetry install --extras gpu
 ```
 
-### CPU Setup
+##### CPU Setup
 
 Because pip and Poetry do not natively allow conditional hardware-based resolution in a single configuration block, 
 the CPU and GPU dependencies are mutually exclusive. You must manually modify the `pyproject.toml` file to switch from GPU to CPU.
@@ -77,41 +106,130 @@ Finally, install the CPU dependencies with:
 poetry install --extras cpu
 ```
 
-## Usage
+#### Database
 
-### Local Setup
+Make sure to have a running PostgreSQL instance (https://www.postgresql.org/download/), which will have you create a 
+default `postgres` user with its password.
 
-1. Before starting the application, download the required pre-trained model weights from the [GitHub Releases](https://github.com/pietro-foini/Camera-traps-wild-life/releases) page of this repository:
-   
-   - **Object Detection:** MegaDetector v1000 model weights.
-   - **Classification:** Fine-tuned ConvNeXtBase model weights.
+Using any graphical client (e.g. DBeaver) for the local configuration, create a connection to PostgreSQL on port
+5432 and create a database:
 
-2. Create an environment file defining your local model file paths and application settings (refer to [`settings.py`](./camera_traps/settings.py) for reference).
+```sql
+CREATE DATABASE cameratraps;
+```
 
-3. Ensure a **PostgreSQL** database instance is running to record image metadata and model predictions.
+At the end of this step, add to the environment file the variables referring to the database.
 
-4. Start the application server:
+Example:
+
+```
+DB_USER=postgres
+DB_PASSWORD=xxxxxxxx
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=cameratraps
+```
+
+#### Storage
+
+Object storage is provided by [SeaweedFS](https://github.com/seaweedfs/seaweedfs), which exposes an S3-compatible API and runs as a single executable.
+
+- Download the release for your operating system from the
+  [official releases page](https://github.com/seaweedfs/seaweedfs/releases) and extract the `weed` executable into a folder of your choice.
+- Add that folder to your system `PATH`.
+- Create a directory where the data will be stored (e.g. `./seaweedfs-data`).
+
+   ```bash
+   mkdir ./seaweedfs-data
+   ```
+
+- Start SeaweedFS with the S3 module enabled:
+
+   ```bash
+     weed server -s3 -dir="./seaweedfs-data"
+   ```
+
+  (Keep this terminal window running as long as you need the storage active.)
+
+Once started, the following services are available:
+
+- **Filer (file browser)**: http://localhost:8888, where you can browse, download and view the stored objects
+  (buckets are under `/buckets`).
+- **Master (cluster status)**: http://localhost:9333, to check volumes and disk space.
+- **S3 API**: http://localhost:8333.
+
+At the end of this step, add to the environment file the variables referring to the storage.
+
+Example:
+
+```
+S3_ENDPOINT_URL=http://localhost:8333
+S3_ACCESS_KEY=xxxxxxxx
+S3_SECRET_KEY=xxxxxxxx
+```
+
+#### Running the Application
+
+With **PostgreSQL** and **SeaweedFS** running in the background, start the application server:
 
    ```bash
    uvicorn camera_traps.main:app --env-file /path/to/your/local/env --reload
    ```
+
+The Application will be available at http://localhost:8000.
   
 ### Docker Setup
 
-Run the entire pipeline with a single command:
+If you prefer running the entire stack (Application, PostgreSQL, and SeaweedFS) in containers, configure your 
+`/path/to/your/local/env` file with the internal container paths for the models (since Docker mounts the models directory 
+to `/app/models`):
 
-```bash
-docker compose --env-file /path/to/your/local/env up --build
+```
+CLASSIFIER_MODEL_PATH=/app/models/classifier.tflite
+DETECTOR_MODEL_PATH=/app/models/detector.tflite
+DB_USER=postgres
+DB_PASSWORD=password
+DB_PORT=5432
+DB_NAME=camera_traps
+S3_ACCESS_KEY=xxxxxxxx
+S3_SECRET_KEY=xxxxxxxx
 ```
 
-Note on Model Volumes: By default, Docker Compose mounts ./models to /app/models. If your model files are stored in a 
-different host path, override the `MODELS_DIR` environment variable:
+(Note: `DB_HOST` and `S3_ENDPOINT_URL` are automatically set inside `docker-compose.yml`).
+
+Run the entire pipeline with a single command:
 
 ```bash
 ENV_FILE=/path/to/your/local/env MODELS_DIR=/path/to/your/local/models docker compose --env-file /path/to/your/local/env up --build
 ```
 
-The app will be available at http://localhost:8000.
+Note on defaults: If your environment file is named .env in the project root and your models are stored in ./models, 
+you can simply run:
+
+```bash
+docker compose up --build
+```
+
+Once the containers are running:
+
+- The Application will be available at http://localhost:8000.
+- SeaweedFS Filer will be available at http://localhost:8888.
+
+## How It Works 
+
+The entire infrastructure is designed around an **event-driven pipeline**: whenever a new video (or image, if you modify 
+the configuration) is uploaded to the `input/` folder inside the target  bucket, SeaweedFS automatically triggers the inference 
+pipeline by sending an HTTP `POST` notification to the application's `/predict-video` endpoint.
+
+This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
+more information on how SeaweedFS handles event notifications, refer to the official 
+[Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
+
+Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
+webhook endpoint is dynamically overridden to http://app:8000/predict-video via `docker-compose.yaml`.
+
+The processed videos (or images) will be automatically uploaded to the `output/` folder inside the target bucket and
+to the corresponding PostgreSQL tables.
 
 -----
 
@@ -119,7 +237,7 @@ The app will be available at http://localhost:8000.
 
 The inference pipeline consists of three stages:
 
-- **Object Detection:**: `MegaDetector` is employed to detect animals, humans, and vehicles in camera trap images, filtering out empty frames or background noise.
+- **Object Detection:** `MegaDetector` is employed to detect animals, humans, and vehicles in camera trap images, filtering out empty frames or background noise.
 - **Classification:** Detected cropped regions are processed by a fine-tuned `ConvNeXtBase` model trained to identify specific wildlife species.
 - **Tracking:** Uses a `SORTTracker` to maintain object identities across video frames and applies label smoothing to stabilize predictions along tracked trajectories.
 

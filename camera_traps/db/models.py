@@ -1,9 +1,13 @@
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import DeclarativeBase, relationship
 
-from camera_traps.db.base import Base
+
+class Base(DeclarativeBase):
+    """Base declarative class for all SQLAlchemy ORM (Object-Relational Mapping) models"""
+
+    pass
 
 
 class ImageInputModel(Base):

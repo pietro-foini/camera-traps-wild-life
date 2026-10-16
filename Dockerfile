@@ -2,11 +2,13 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
+# Install Poetry.
+RUN pip install --no-cache-dir poetry==2.4.1
+
 # Copy dependency files.
-COPY requirements.txt pyproject.toml poetry.lock* ./
+COPY pyproject.toml poetry.lock* ./
 
 # Configure poetry to create the virtual environment in the project root (.venv).
-RUN pip install --no-cache-dir -r requirements.txt
 RUN poetry config virtualenvs.in-project true \
     && poetry install --only main --no-root
 

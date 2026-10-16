@@ -1,0 +1,9 @@
+[notification.webhook]
+enabled = true
+endpoint = "http://localhost:8000/predict-video"
+event_types = ["create"]
+path_prefixes = ["/buckets/bucket-cameratraps/input/"]
+timeout_seconds = 300
+workers = 1
+buffer_size = 100
+max_retries = 0

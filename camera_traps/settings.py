@@ -16,6 +16,16 @@ class Settings(BaseSettings):
     DB_NAME: str
     """database name"""
 
+    # Storage.
+    S3_ENDPOINT_URL: str
+    """endpoint url"""
+    S3_ACCESS_KEY: str
+    """access key"""
+    S3_SECRET_KEY: str
+    """secret key"""
+    S3_BUCKET: str = "bucket-cameratraps"
+    """bucket name"""
+
     # Models for detection and classification.
     CLASSIFIER_MODEL_PATH: str
     """path to the model used for image classification"""
