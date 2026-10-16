@@ -7,6 +7,12 @@ from fastapi.testclient import TestClient
 from trackers import SORTTracker
 
 from tests.config import *
+from camera_traps.api.schemas import (
+    SeaweedEntry,
+    SeaweedFileAttributes,
+    SeaweedNotificationMessage,
+    SeaweedWebhookEvent,
+)
 from camera_traps.models.models import Classification, Detection, BoundingBox
 
 
@@ -31,6 +37,28 @@ def create_dummy_video_bytes():
     container.close()
 
     return output.getvalue()
+
+
+def create_webhook_payload(
+    key="/buckets/my-bucket/test.mp4",
+    name="test.mp4",
+    event_type="create",
+    is_directory=False,
+    mime="video/mp4",
+):
+    event = SeaweedWebhookEvent(
+        key=key,
+        event_type=event_type,
+        message=SeaweedNotificationMessage(
+            new_entry=SeaweedEntry(
+                name=name,
+                is_directory=is_directory,
+                attributes=SeaweedFileAttributes(mime=mime),
+            )
+        ),
+    )
+
+    return event.model_dump()
 
 
 @patch("camera_traps.api.routes.video.annotate", return_value=b"fake_annotated_bytes")
@@ -88,20 +116,25 @@ def test_predict_video_success(mock_annotate):
     mock_saved_video.id = 1
     mock_db.add_record.return_value = mock_saved_video
 
+    mock_storage = MagicMock()
+    mock_storage.download.return_value = create_dummy_video_bytes()
+
     app.state.classifier = mock_classifier
     app.state.detector = mock_detector
     app.state.db = mock_db
+    app.state.storage = mock_storage
     app.state.tracker = SORTTracker()
 
-    video_bytes = create_dummy_video_bytes()
-
+    payload = create_webhook_payload()
     response = client.post(
         "/predict-video",
-        files={"file": ("test.mp4", io.BytesIO(video_bytes), "video/mp4")},
+        json=payload,
     )
 
     assert response.status_code == 200
     assert "test.mp4" in response.text
+    mock_storage.download.assert_called_once_with("s3://my-bucket/test.mp4")
+    mock_storage.upload.assert_called_once()
     assert mock_detector.predict.call_count == 4
     assert mock_classifier.predict.call_count == 2
     assert mock_db.add_record.call_count >= 1
@@ -119,15 +152,21 @@ def test_predict_video_invalid_content_type():
     app.state.classifier = MagicMock()
     app.state.detector = MagicMock()
     app.state.db = MagicMock()
+    app.state.storage = MagicMock()
     app.state.tracker = MagicMock()
 
+    payload = create_webhook_payload(
+        key="/buckets/my-bucket/test.txt",
+        name="test.txt",
+        mime="text/plain",
+    )
     response = client.post(
         "/predict-video",
-        files={"file": ("test.txt", io.BytesIO(b"not a video"), "text/plain")},
+        json=payload,
     )
 
     assert response.status_code == 400
-    assert response.text == "Uploaded file is not a valid video."
+    assert response.json()["detail"] == "Uploaded file is not a valid video."
 
     app.dependency_overrides.clear()
 
@@ -149,20 +188,27 @@ def test_predict_video_no_detections():
     mock_saved_video.id = 1
     mock_db.add_record.return_value = mock_saved_video
 
+    mock_storage = MagicMock()
+    mock_storage.download.return_value = create_dummy_video_bytes()
+
     app.state.classifier = mock_classifier
     app.state.detector = mock_detector
     app.state.db = mock_db
+    app.state.storage = mock_storage
     app.state.tracker = MagicMock()
 
-    video_bytes = create_dummy_video_bytes()
-
+    payload = create_webhook_payload(
+        key="/buckets/my-bucket/empty.mp4",
+        name="empty.mp4",
+    )
     response = client.post(
         "/predict-video",
-        files={"file": ("empty.mp4", io.BytesIO(video_bytes), "video/mp4")},
+        json=payload,
     )
 
     assert response.status_code == 200
     assert "empty.mp4" in response.text
     mock_classifier.predict.assert_not_called()
+    mock_storage.upload.assert_not_called()
 
     app.dependency_overrides.clear()

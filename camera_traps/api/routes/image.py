@@ -1,46 +1,56 @@
-import base64
-from pathlib import Path
+from typing import Annotated
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, File, Request, UploadFile
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, HTTPException
 
+from camera_traps.api.dependencies import get_classifier, get_db, get_storage
+from camera_traps.api.schemas import SeaweedWebhookEvent
 from camera_traps.db.models import ImageInputModel, ImageOutputModel
+from camera_traps.db.postgres import PostgresHandler
+from camera_traps.errors import StorageException
+from camera_traps.models.domain import Predictor
 from camera_traps.models.models import ImageClassificationResponse
+from camera_traps.storage.s3 import S3Storage
 
 image_router = APIRouter()
 
-templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent.parent / "templates"))
 
+@image_router.post(path="/predict-image", response_model=ImageClassificationResponse, status_code=200)
+def predict_image(
+    message: SeaweedWebhookEvent,
+    db: Annotated[PostgresHandler, Depends(get_db)],
+    storage: Annotated[S3Storage, Depends(get_storage)],
+    classifier: Annotated[Predictor, Depends(get_classifier)],
+):
 
-@image_router.post(path="/predict-image", response_class=HTMLResponse)
-def predict_image(request: Request, file: UploadFile = File(...)):
-
-    if not file.filename or not file.content_type or not file.content_type.startswith("image/"):
-        return HTMLResponse(content="Uploaded file is not a valid image.", status_code=400)
+    if (
+        message.event_type != "create"
+        or message.message.new_entry.is_directory
+        or not message.message.new_entry.attributes.mime.startswith("image/")
+    ):
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
 
     # Store input record on database.
-    image_record = ImageInputModel(filename=file.filename)
-    saved_image = request.app.state.db.add_record(image_record)
+    image_record = ImageInputModel(filename=message.s3_uri)
+    saved_image = db.add_record(image_record)
 
     # Read image.
     try:
-        img_bytes = file.file.read()
-    finally:
-        file.file.close()
+        img_bytes = storage.download(message.s3_uri)
+    except StorageException as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     img_array = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
 
     if img_array is None:
-        return HTMLResponse(content="Uploaded file is not a valid image.", status_code=400)
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
 
     img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
     # Predict.
-    predictions = request.app.state.classifier.predict(img_array, top=5)
-    response = ImageClassificationResponse(filename=file.filename, predictions=predictions)
+    predictions = classifier.predict(img_array, top=5)
+    response = ImageClassificationResponse(filename=message.s3_uri, predictions=predictions)
 
     # Store output record on database.
     for pred in response.predictions:
@@ -49,14 +59,6 @@ def predict_image(request: Request, file: UploadFile = File(...)):
             label=pred.class_name,
             confidence=float(pred.confidence),
         )
-        request.app.state.db.add_record(pred_record)
+        db.add_record(pred_record)
 
-    return templates.TemplateResponse(
-        name="partials/image_result.html",
-        request=request,
-        context={
-            "response": response,
-            "image_b64": base64.b64encode(img_bytes).decode("utf-8"),  # type: ignore
-            "mime_type": file.content_type,
-        },
-    )
+    return response
