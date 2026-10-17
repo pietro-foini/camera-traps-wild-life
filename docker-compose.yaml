@@ -4,15 +4,16 @@ services:
     container_name: camera_traps_db
     restart: always
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-      POSTGRES_DB: ${DB_NAME:-camera_traps}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5435:5432"
+    # mem_limit: 150m
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-camera_traps}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,10 +27,17 @@ services:
     ports:
       - "8888:8888"
       - "8333:8333"
-    command: "server -ip=seaweedfs -filer -s3 -dir=/data -volume.max=30"
+    command: "server -ip=seaweedfs -ip.bind=0.0.0.0 -filer -s3 -dir=/data -volume.max=30"
+    # mem_limit: 350m
     volumes:
       - ./notification.toml:/etc/seaweedfs/notification.toml:ro
       - seaweed_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z seaweedfs 8333 || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
 
   app:
     build:
@@ -44,13 +52,14 @@ services:
     environment:
       - DB_HOST=postgres_db
       - S3_ENDPOINT_URL=http://seaweedfs:8333
+    # mem_limit: 1000m
     volumes:
       - ${MODELS_DIR:-./models}:/app/models
     depends_on:
       postgres_db:
         condition: service_healthy
       seaweedfs:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:
