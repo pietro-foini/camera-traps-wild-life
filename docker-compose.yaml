@@ -9,7 +9,6 @@ services:
       POSTGRES_DB: ${DB_NAME}
     ports:
       - "5435:5432"
-    # mem_limit: 150m
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +27,6 @@ services:
       - "8888:8888"
       - "8333:8333"
     command: "server -ip=seaweedfs -ip.bind=0.0.0.0 -filer -s3 -dir=/data -volume.max=30"
-    # mem_limit: 350m
     volumes:
       - ./notification.toml:/etc/seaweedfs/notification.toml:ro
       - seaweed_data:/data
@@ -52,7 +50,6 @@ services:
     environment:
       - DB_HOST=postgres_db
       - S3_ENDPOINT_URL=http://seaweedfs:8333
-    # mem_limit: 1000m
     volumes:
       - ${MODELS_DIR:-./models}:/app/models
     depends_on:
