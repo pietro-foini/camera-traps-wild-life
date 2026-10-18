@@ -190,7 +190,7 @@ DETECTOR_MODEL_PATH=/app/models/detector.tflite
 DB_USER=postgres
 DB_PASSWORD=password
 DB_PORT=5432
-DB_NAME=camera_traps
+DB_NAME=cameratraps
 S3_ACCESS_KEY=xxxxxxxx
 S3_SECRET_KEY=xxxxxxxx
 ```
