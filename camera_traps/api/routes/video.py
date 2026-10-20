@@ -50,6 +50,7 @@ def predict_video(
         classifier=classifier,
         tracker=tracker,
         detector_threshold=S.DETECTOR_THRESHOLD,
+        target_fps=S.FRAMES_PER_SECOND,
     )
 
     if not response.predictions:
@@ -74,7 +75,7 @@ def predict_video(
         db.add_record(detection_record)
 
     # Render annotated video.
-    video_bytes_output = annotate(video_bytes=video_bytes, response=response)
+    video_bytes_output = annotate(video_bytes=video_bytes, response=response, target_fps=S.FRAMES_PER_SECOND)
 
     storage.upload(
         key=f"output/{message.message.new_entry.name}",
