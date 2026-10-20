@@ -233,6 +233,20 @@ Once the containers are running:
 
 ## How It Works 
 
+```mermaid
+flowchart LR
+    A[("SeaweedFS<br/>(input/)")] -->|POST /webhook| B["Webhook Receiver<br/>(FastAPI)"]
+    
+    B -->|MIME: image/*| C[["Redis Stream<br/>(image-queue)"]]
+    B -->|MIME: video/*| D[["Redis Stream<br/>(video-queue)"]]
+    
+    C -->|Consume| E["Image Worker<br/>(/predict-image)"]
+    D -->|Consume| F["Video Worker<br/>(/predict-video)"]
+    
+    E & F -->|Save predictions| G[("PostgreSQL")]
+    F -->|Upload video| H[("SeaweedFS<br/>(output/)")]
+```
+
 The entire infrastructure is designed around an **event-driven pipeline**: whenever a new file is uploaded to the `input/` 
 folder inside the target bucket, SeaweedFS automatically sends an HTTP `POST` notification to the application's `/webhook` endpoint.
 
