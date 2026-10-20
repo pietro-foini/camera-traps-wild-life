@@ -24,19 +24,12 @@ def process(
     Process video stream by running object detection, tracking, and crop classification frame by frame.
 
     :param filename: name of the video file
-    :type filename: str
     :param video_bytes: raw bytes of the video file
-    :type video_bytes: bytes
     :param detector: object detector model instance
-    :type detector: Predictor
     :param classifier: crop classifier model instance
-    :type classifier: Predictor
     :param tracker: object tracker instance
-    :type tracker: BaseTracker
     :param detector_threshold: minimum confidence threshold for object detection
-    :type detector_threshold: float
     :return: response payload containing frame-by-frame object detections and tracking results
-    :rtype: VideoDetectionResponse
     """
 
     # Open video file.
@@ -113,11 +106,8 @@ def smooth(response: VideoDetectionResponse, threshold: float) -> VideoDetection
     Consolidate tracking labels by selecting the most confident class per track.
 
     :param response: input containing video predictions
-    :type response: VideoDetectionResponse
     :param threshold: minimum confidence threshold for score aggregation
-    :type threshold: Any
     :return: processed video predictions with consolidated labels and re-indexed tracking IDs
-    :rtype: VideoDetectionResponse
     """
 
     if not response.predictions:
@@ -160,11 +150,8 @@ def annotate(video_bytes: bytes, response: VideoDetectionResponse) -> bytes:
     Annotate video frames with bounding boxes and labels entirely in memory.
 
     :param video_bytes: raw bytes of the input video file
-    :type video_bytes: bytes
     :param response: video predictions containing detections and tracking IDs
-    :type response: VideoDetectionResponse
     :return: raw bytes of the annotated MP4 video
-    :rtype: bytes
     """
 
     in_container = av.open(io.BytesIO(video_bytes))

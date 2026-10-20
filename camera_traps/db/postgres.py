@@ -17,15 +17,10 @@ class PostgresHandler:
         Initialize the database handler.
 
         :param db_user: database username
-        :type db_user: str
         :param db_password: database password
-        :type db_password: str
         :param db_host: database host address
-        :type db_host: str
         :param db_port: database port number
-        :type db_port: str
         :param db_name: database name
-        :type db_name: str
         """
 
         self.db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
@@ -53,9 +48,7 @@ class PostgresHandler:
         Insert a single ORM record into the database.
 
         :param record: the ORM model instance to insert
-        :type record: ModelType
         :return: the inserted ORM model instance with refreshed fields
-        :rtype: ModelType
         """
 
         session = self.SessionLocal()
