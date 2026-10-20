@@ -11,6 +11,7 @@ python = ">=3.11,<3.13"
 # Web App & API
 uvicorn = "0.52.4"
 fastapi = "0.141.1"
+faststream = { version = "0.7.7", extras = ["redis"] }
 # Data Processing & Config
 numpy = "2.4.6"
 pydantic = "2.13.5"

@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "bucket-cameratraps"
     """bucket name"""
 
+    # Messages
+    REDIS_URL: str
+    """redis url"""
+
     # Models for detection and classification.
     CLASSIFIER_MODEL_PATH: str
     """path to the model used for image classification"""

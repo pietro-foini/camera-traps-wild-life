@@ -5,12 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tests.config import *
-from camera_traps.api.schemas import (
-    SeaweedEntry,
-    SeaweedFileAttributes,
-    SeaweedNotificationMessage,
-    SeaweedWebhookEvent,
-)
+from camera_traps.api.schemas import InputMessage
 from camera_traps.models.models import Classification
 
 
@@ -21,30 +16,6 @@ def create_dummy_image_bytes():
     _, encoded_img = cv2.imencode(".jpg", img)
 
     return encoded_img.tobytes()
-
-
-def create_webhook_payload(
-    key="/buckets/my-bucket/test.jpg",
-    name="test.jpg",
-    event_type="create",
-    is_directory=False,
-    mime="image/jpeg",
-):
-    """Generate SeaweedFS webhook payload."""
-
-    event = SeaweedWebhookEvent(
-        key=key,
-        event_type=event_type,
-        message=SeaweedNotificationMessage(
-            new_entry=SeaweedEntry(
-                name=name,
-                is_directory=is_directory,
-                attributes=SeaweedFileAttributes(mime=mime),
-            )
-        ),
-    )
-
-    return event.model_dump()
 
 
 def test_predict_image_success():
@@ -81,7 +52,7 @@ def test_predict_image_success():
     app.state.storage = mock_storage
 
     # Send request.
-    payload = create_webhook_payload()
+    payload = InputMessage(uri="s3://my-bucket/test.jpg", name="test.jpg").model_dump()
     response = client.post(
         "/predict-image",
         json=payload,
@@ -94,31 +65,6 @@ def test_predict_image_success():
     mock_storage.download.assert_called_once_with("s3://my-bucket/test.jpg")
     mock_predictor.predict.assert_called_once_with(ANY, top=5)
     assert mock_db.add_record.call_count == 6
-
-    app.dependency_overrides.clear()
-
-
-def test_predict_image_invalid_content_type():
-    """Invalid content type."""
-
-    from camera_traps.api.routes import image_router
-
-    app = FastAPI()
-    app.include_router(image_router)
-    client = TestClient(app)
-
-    app.state.classifier = MagicMock()
-    app.state.db = MagicMock()
-    app.state.storage = MagicMock()
-
-    payload = create_webhook_payload(name="test.txt", mime="text/plain")
-    response = client.post(
-        "/predict-image",
-        json=payload,
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Uploaded file is not a valid image."
 
     app.dependency_overrides.clear()
 
@@ -139,7 +85,7 @@ def test_predict_image_corrupt_bytes():
     app.state.db = MagicMock()
     app.state.storage = mock_storage
 
-    payload = create_webhook_payload(key="/buckets/my-bucket/corrupt.jpg", name="corrupt.jpg")
+    payload = InputMessage(uri="s3://my-bucket/test.jpg", name="test.jpg").model_dump()
     response = client.post(
         "/predict-image",
         json=payload,

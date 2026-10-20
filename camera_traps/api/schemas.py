@@ -40,3 +40,10 @@ class SeaweedWebhookEvent(BaseModel):
         """Convert SeaweedFS filer key to S3 URI"""
 
         return self.key.replace("/buckets/", "s3://", 1)
+
+
+class InputMessage(BaseModel):
+    """Input message"""
+
+    uri: str
+    name: str

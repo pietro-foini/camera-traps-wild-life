@@ -7,12 +7,7 @@ from fastapi.testclient import TestClient
 from trackers import SORTTracker
 
 from tests.config import *
-from camera_traps.api.schemas import (
-    SeaweedEntry,
-    SeaweedFileAttributes,
-    SeaweedNotificationMessage,
-    SeaweedWebhookEvent,
-)
+from camera_traps.api.schemas import InputMessage
 from camera_traps.models.models import Classification, Detection, BoundingBox
 
 
@@ -37,28 +32,6 @@ def create_dummy_video_bytes():
     container.close()
 
     return output.getvalue()
-
-
-def create_webhook_payload(
-    key="/buckets/my-bucket/test.mp4",
-    name="test.mp4",
-    event_type="create",
-    is_directory=False,
-    mime="video/mp4",
-):
-    event = SeaweedWebhookEvent(
-        key=key,
-        event_type=event_type,
-        message=SeaweedNotificationMessage(
-            new_entry=SeaweedEntry(
-                name=name,
-                is_directory=is_directory,
-                attributes=SeaweedFileAttributes(mime=mime),
-            )
-        ),
-    )
-
-    return event.model_dump()
 
 
 @patch("camera_traps.api.routes.video.annotate", return_value=b"fake_annotated_bytes")
@@ -125,7 +98,7 @@ def test_predict_video_success(mock_annotate):
     app.state.storage = mock_storage
     app.state.tracker = SORTTracker()
 
-    payload = create_webhook_payload()
+    payload = InputMessage(uri="s3://my-bucket/test.mp4", name="test.mp4").model_dump()
     response = client.post(
         "/predict-video",
         json=payload,
@@ -138,35 +111,6 @@ def test_predict_video_success(mock_annotate):
     assert mock_detector.predict.call_count == 4
     assert mock_classifier.predict.call_count == 2
     assert mock_db.add_record.call_count >= 1
-
-    app.dependency_overrides.clear()
-
-
-def test_predict_video_invalid_content_type():
-    from camera_traps.api.routes import video_router
-
-    app = FastAPI()
-    app.include_router(video_router)
-    client = TestClient(app)
-
-    app.state.classifier = MagicMock()
-    app.state.detector = MagicMock()
-    app.state.db = MagicMock()
-    app.state.storage = MagicMock()
-    app.state.tracker = MagicMock()
-
-    payload = create_webhook_payload(
-        key="/buckets/my-bucket/test.txt",
-        name="test.txt",
-        mime="text/plain",
-    )
-    response = client.post(
-        "/predict-video",
-        json=payload,
-    )
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Uploaded file is not a valid video."
 
     app.dependency_overrides.clear()
 
@@ -197,10 +141,7 @@ def test_predict_video_no_detections():
     app.state.storage = mock_storage
     app.state.tracker = MagicMock()
 
-    payload = create_webhook_payload(
-        key="/buckets/my-bucket/empty.mp4",
-        name="empty.mp4",
-    )
+    payload = InputMessage(uri="s3://my-bucket/empty.mp4", name="empty.mp4").model_dump()
     response = client.post(
         "/predict-video",
         json=payload,

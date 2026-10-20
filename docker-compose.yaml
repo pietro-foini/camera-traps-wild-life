@@ -17,12 +17,27 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: camera_traps_redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   seaweedfs:
     image: chrislusf/seaweedfs:latest
     container_name: camera_traps_storage
     restart: always
     environment:
-      - WEED_NOTIFICATION_WEBHOOK_ENDPOINT=http://app:8000/predict-video
+      - WEED_NOTIFICATION_WEBHOOK_ENDPOINT=http://app:8000/webhook
     ports:
       - "8888:8888"
       - "8333:8333"
@@ -52,6 +67,7 @@ services:
     environment:
       - DB_HOST=postgres_db
       - S3_ENDPOINT_URL=http://seaweedfs:8333
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ${MODELS_DIR:-./models}:/app/models
     depends_on:
@@ -59,7 +75,10 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   seaweed_data:
+  redis_data:
