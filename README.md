@@ -168,9 +168,25 @@ S3_ACCESS_KEY=xxxxxxxx
 S3_SECRET_KEY=xxxxxxxx
 ```
 
+#### Message Broker
+
+Message queuing and event streaming are handled by [Redis](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/).
+
+- Install and start a local Redis server on the default port (`6379`):
+
+  ```bash
+  redis-server
+  ```
+  
+At the end of this step, add to the environment file the variable referring to Redis. Example:
+
+```
+REDIS_URL=redis://localhost:6379
+```
+
 #### Running the Application
 
-With **PostgreSQL** and **SeaweedFS** running in the background, start the application server:
+With **PostgreSQL**, **SeaweedFS**, and **Redis** running in the background, start the application server:
 
    ```bash
    uvicorn camera_traps.main:app --env-file /path/to/your/local/env --reload
@@ -180,7 +196,7 @@ The Application will be available at http://localhost:8000.
   
 ### Docker Setup
 
-If you prefer running the entire stack (Application, PostgreSQL, and SeaweedFS) in containers, configure your 
+If you prefer running the entire stack (Application, PostgreSQL, SeaweedFS and Redis) in containers, configure your 
 `/path/to/your/local/env` file with the internal container paths for the models (since Docker mounts the models directory 
 to `/app/models`):
 
@@ -195,7 +211,7 @@ S3_ACCESS_KEY=xxxxxxxx
 S3_SECRET_KEY=xxxxxxxx
 ```
 
-(Note: `DB_HOST` and `S3_ENDPOINT_URL` are automatically set inside `docker-compose.yml`).
+(Note: `DB_HOST`, `S3_ENDPOINT_URL`, and `REDIS_URL` are automatically set inside `docker-compose.yml`).
 
 Run the entire pipeline with a single command:
 
@@ -217,18 +233,21 @@ Once the containers are running:
 
 ## How It Works 
 
-The entire infrastructure is designed around an **event-driven pipeline**: whenever a new video (or image, if you modify 
-the configuration) is uploaded to the `input/` folder inside the target  bucket, SeaweedFS automatically triggers the inference 
-pipeline by sending an HTTP `POST` notification to the application's `/predict-video` endpoint.
+The entire infrastructure is designed around an **event-driven pipeline**: whenever a new file is uploaded to the `input/` 
+folder inside the target bucket, SeaweedFS automatically sends an HTTP `POST` notification to the application's `/webhook` endpoint.
+
+The `/webhook` endpoint inspects the file's MIME type (ignoring directories) and publishes a message to the corresponding 
+**Redis Stream** (`image-queue` for images or `video-queue` for videos), which is then consumed asynchronously by the 
+inference subscribers (`/predict-image` and `/predict-video`).
 
 This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
 more information on how SeaweedFS handles event notifications, refer to the official 
 [Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
 
 Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
-webhook endpoint is dynamically overridden to http://app:8000/predict-video via `docker-compose.yaml`.
+webhook endpoint is dynamically overridden to http://app:8000/webhook via `docker-compose.yaml`.
 
-The processed videos (or images) will be automatically uploaded to the `output/` folder inside the target bucket and
+The processed videos and images will be automatically uploaded to the `output/` folder inside the target bucket and
 to the corresponding PostgreSQL tables.
 
 -----
