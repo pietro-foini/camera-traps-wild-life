@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     """threshold for keeping detected objects"""
 
     # Video settings.
-    FRAMES_PER_SECOND: int | None = 5
+    FRAMES_PER_SECOND: int | None = None
     """frames per second"""
 
 
