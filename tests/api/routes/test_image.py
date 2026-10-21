@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from tests.config import *
 from camera_traps.api.schemas import InputMessage
-from camera_traps.models.models import Classification
+from camera_traps.models.schemas import Classification
 
 
 def create_dummy_image_bytes():

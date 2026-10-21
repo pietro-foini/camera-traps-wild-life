@@ -8,7 +8,7 @@ from trackers import SORTTracker
 
 from tests.config import *
 from camera_traps.api.schemas import InputMessage
-from camera_traps.models.models import Classification, Detection, BoundingBox
+from camera_traps.models.schemas import Classification, Detection, BoundingBox
 
 
 def create_dummy_video_bytes():

@@ -5,10 +5,11 @@
 
 Hello there! 😀
 
-This project was born from the idea of applying such algorithms to camera traps located on my family’s property in a 
-remote area of Italy, where wildlife is frequently observed. The goal was to develop a simple application for fixed 
-camera trap systems, where a basic motion detection algorithm could automatically identify subjects to be analyzed 
-by a fine-tuned machine learning model for image classification.
+This project was born from the idea of applying such algorithms to video footage captured by camera traps located on my 
+family’s property in a remote area of Italy, where wildlife is frequently observed. The goal was to develop a simple 
+application for fixed camera trap systems, where a motion detection system could automatically identify subjects in 
+video footage to be analyzed by a benchmark object detection model and a fine-tuned machine learning model for image 
+classification.
 
 Example of results applied to generic camera traps (used only for inference purposes):
 
@@ -26,7 +27,7 @@ Example of results applied to generic camera traps (used only for inference purp
   </tr>
 </table>
 
-Using Grad-CAM, we achieve model explainability to observe where the model focuses to reach its conclusions:
+Using Grad-CAM, you can achieve model explainability to observe where the model focuses to reach its conclusions:
 
 <p align="center">
   <img src="assets/gradcam_badger.jpg" alt="Grad-CAM Visualization" width="232">
@@ -204,7 +205,7 @@ to `/app/models`):
 CLASSIFIER_MODEL_PATH=/app/models/classifier.tflite
 DETECTOR_MODEL_PATH=/app/models/detector.tflite
 DB_USER=postgres
-DB_PASSWORD=password
+DB_PASSWORD=xxxxxxxx
 DB_PORT=5432
 DB_NAME=cameratraps
 S3_ACCESS_KEY=xxxxxxxx
@@ -219,7 +220,7 @@ Run the entire pipeline with a single command:
 ENV_FILE=/path/to/your/local/env MODELS_DIR=/path/to/your/local/models docker compose --env-file /path/to/your/local/env up --build
 ```
 
-Note on defaults: If your environment file is named .env in the project root and your models are stored in ./models, 
+Note on defaults: If your environment file is named `.env` in the project root and your models are stored in `./models`, 
 you can simply run:
 
 ```bash

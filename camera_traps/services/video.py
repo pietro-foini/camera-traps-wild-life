@@ -9,7 +9,7 @@ from trackers.core.base import BaseTracker
 
 from camera_traps.data import ClassifierClasses
 from camera_traps.models.domain import Predictor
-from camera_traps.models.models import BoundingBox, Detection, VideoDetectionResponse
+from camera_traps.models.schemas import BoundingBox, Detection, VideoDetectionResponse
 
 
 def process(

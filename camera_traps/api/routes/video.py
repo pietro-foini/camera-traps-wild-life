@@ -11,7 +11,7 @@ from camera_traps.db.models import VideoInputModel, VideoOutputModel
 from camera_traps.db.postgres import PostgresHandler
 from camera_traps.errors import StorageException
 from camera_traps.models.domain import Predictor
-from camera_traps.models.models import VideoDetectionResponse
+from camera_traps.models.schemas import VideoDetectionResponse
 from camera_traps.services.video import annotate, process, smooth
 from camera_traps.settings import S
 from camera_traps.storage.s3 import S3Storage
