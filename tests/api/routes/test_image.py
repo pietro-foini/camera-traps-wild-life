@@ -52,7 +52,7 @@ def test_predict_image_success():
     app.state.storage = mock_storage
 
     # Send request.
-    payload = InputMessage(uri="s3://my-bucket/test.jpg", name="test.jpg").model_dump()
+    payload = InputMessage(id=123, uri="s3://my-bucket/test.jpg", name="test.jpg").model_dump()
     response = client.post(
         "/predict-image",
         json=payload,
@@ -64,7 +64,8 @@ def test_predict_image_success():
     assert data["predictions"][0]["class_name"] == "fox"
     mock_storage.download.assert_called_once_with("s3://my-bucket/test.jpg")
     mock_predictor.predict.assert_called_once_with(ANY, top=5)
-    assert mock_db.add_record.call_count == 6
+    assert mock_db.add_record.call_count == 5
+    assert mock_db.update_record.call_count == 2
 
     app.dependency_overrides.clear()
 
@@ -85,7 +86,7 @@ def test_predict_image_corrupt_bytes():
     app.state.db = MagicMock()
     app.state.storage = mock_storage
 
-    payload = InputMessage(uri="s3://my-bucket/test.jpg", name="test.jpg").model_dump()
+    payload = InputMessage(id=123, uri="s3://my-bucket/test.jpg", name="test.jpg").model_dump()
     response = client.post(
         "/predict-image",
         json=payload,

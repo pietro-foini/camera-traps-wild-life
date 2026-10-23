@@ -98,7 +98,7 @@ def test_predict_video_success(mock_annotate):
     app.state.storage = mock_storage
     app.state.tracker = SORTTracker()
 
-    payload = InputMessage(uri="s3://my-bucket/test.mp4", name="test.mp4").model_dump()
+    payload = InputMessage(id=123, uri="s3://my-bucket/test.mp4", name="test.mp4").model_dump()
     response = client.post(
         "/predict-video",
         json=payload,
@@ -141,7 +141,7 @@ def test_predict_video_no_detections():
     app.state.storage = mock_storage
     app.state.tracker = MagicMock()
 
-    payload = InputMessage(uri="s3://my-bucket/empty.mp4", name="empty.mp4").model_dump()
+    payload = InputMessage(id=123, uri="s3://my-bucket/empty.mp4", name="empty.mp4").model_dump()
     response = client.post(
         "/predict-video",
         json=payload,

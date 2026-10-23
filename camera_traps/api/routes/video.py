@@ -81,13 +81,13 @@ def predict_video(
         db.add_record(detection_record)
 
     # Render annotated video.
-    video_bytes_output = annotate(video_bytes=video_bytes, response=response, target_fps=S.FRAMES_PER_SECOND)
-
-    storage.upload(
-        key=f"output/{message.name}",
-        data=video_bytes_output,
-        bucket=S.S3_BUCKET,
-        content_type="video/mp4",
-    )
+    if response.predictions:
+        video_bytes_output = annotate(video_bytes=video_bytes, response=response, target_fps=S.FRAMES_PER_SECOND)
+        storage.upload(
+            key=f"output/{message.name}",
+            data=video_bytes_output,
+            bucket=S.S3_BUCKET,
+            content_type="video/mp4",
+        )
 
     return response
