@@ -1,7 +1,17 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from enum import StrEnum
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import DeclarativeBase, relationship
+
+
+class ProcessingStatus(StrEnum):
+    """Enum for processing status of inference pipeline"""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class Base(DeclarativeBase):
@@ -17,7 +27,10 @@ class ImageInputModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING, nullable=False)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    processing_started_at = Column(DateTime(timezone=True), nullable=True)
+    processing_ended_at = Column(DateTime(timezone=True), nullable=True)
 
     predictions = relationship("ImageOutputModel", back_populates="image", cascade="all, delete-orphan")
 
@@ -42,7 +55,10 @@ class VideoInputModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING, nullable=False)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    processing_started_at = Column(DateTime(timezone=True), nullable=True)
+    processing_ended_at = Column(DateTime(timezone=True), nullable=True)
 
     detections = relationship("VideoOutputModel", back_populates="video", cascade="all, delete-orphan")
 

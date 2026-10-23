@@ -45,5 +45,6 @@ class SeaweedWebhookEvent(BaseModel):
 class InputMessage(BaseModel):
     """Input message"""
 
+    id: int
     uri: str
     name: str

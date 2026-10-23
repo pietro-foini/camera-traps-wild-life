@@ -1,7 +1,7 @@
-from typing import TypeVar
+from typing import Any, Type, TypeVar
 
 import sqlalchemy
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
 from sqlalchemy.orm import sessionmaker
 
 from camera_traps.db.models import Base
@@ -25,7 +25,7 @@ class PostgresHandler:
 
         self.db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         self.engine = create_engine(self.db_url, pool_pre_ping=True)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self.session_factory = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
     def connect(self) -> None:
         """Connect to the database and verify connection status."""
@@ -51,12 +51,32 @@ class PostgresHandler:
         :return: the inserted ORM model instance with refreshed fields
         """
 
-        session = self.SessionLocal()
+        session = self.session_factory()
         try:
             session.add(record)
             session.commit()
             session.refresh(record)
             return record
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    def update_record(self, model: Type[ModelType], record_id: int, **kwargs: Any) -> None:
+        """
+        Update specific columns of a record by its primary key ID.
+
+        :param model: the ORM model class
+        :param record_id: the ID of the record to update
+        :param kwargs: column names and their new values
+        """
+
+        session = self.session_factory()
+        try:
+            stmt = update(model).where(model.id == record_id).values(**kwargs)
+            session.execute(stmt)
+            session.commit()
         except Exception as e:
             session.rollback()
             raise e

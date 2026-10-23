@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
@@ -7,7 +8,7 @@ from trackers import SORTTracker
 
 from camera_traps.api.dependencies import get_classifier, get_db, get_detector, get_storage, get_tracker
 from camera_traps.api.schemas import InputMessage
-from camera_traps.db.models import VideoInputModel, VideoOutputModel
+from camera_traps.db.models import ProcessingStatus, VideoInputModel, VideoOutputModel
 from camera_traps.db.postgres import PostgresHandler
 from camera_traps.errors import StorageException
 from camera_traps.models.domain import Predictor
@@ -31,8 +32,12 @@ def predict_video(
 ):
     """Predict a video"""
 
-    video_record = VideoInputModel(filename=message.uri)
-    saved_video = db.add_record(video_record)
+    db.update_record(
+        VideoInputModel,
+        record_id=message.id,
+        status=ProcessingStatus.PROCESSING,
+        processing_started_at=datetime.now(timezone.utc),
+    )
 
     # Read video file.
     try:
@@ -51,16 +56,19 @@ def predict_video(
         target_fps=S.FRAMES_PER_SECOND,
     )
 
-    if not response.predictions:
-        return VideoDetectionResponse(filename=message.uri, predictions=[])
-
     # Consolidate predictions.
     response = smooth(response=response, threshold=S.CLASSIFIER_THRESHOLD)
 
     # Store record on database.
+    db.update_record(
+        VideoInputModel,
+        record_id=message.id,
+        status=ProcessingStatus.COMPLETED,
+        processing_ended_at=datetime.now(timezone.utc),
+    )
     for pred in response.predictions:
         detection_record = VideoOutputModel(
-            video_input_id=saved_video.id,
+            video_input_id=message.id,
             frame_id=pred.frame_id,
             tracker_id=pred.tracking_id,
             label=pred.class_name,
