@@ -41,11 +41,23 @@ def predict_image(
     try:
         img_bytes = storage.download(message.uri)
     except StorageException as e:
+        db.update_record(
+            ImageInputModel,
+            record_id=message.id,
+            status=ProcessingStatus.FAILED,
+            processing_started_at=datetime.now(timezone.utc),
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
     img_array = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
 
     if img_array is None:
+        db.update_record(
+            ImageInputModel,
+            record_id=message.id,
+            status=ProcessingStatus.FAILED,
+            processing_started_at=datetime.now(timezone.utc),
+        )
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
 
     img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)

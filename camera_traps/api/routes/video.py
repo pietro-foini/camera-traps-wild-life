@@ -43,6 +43,12 @@ def predict_video(
     try:
         video_bytes = storage.download(message.uri)
     except StorageException as e:
+        db.update_record(
+            VideoInputModel,
+            record_id=message.id,
+            status=ProcessingStatus.FAILED,
+            processing_started_at=datetime.now(timezone.utc),
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
     # Get the predictions.

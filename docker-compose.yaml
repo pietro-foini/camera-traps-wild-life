@@ -82,3 +82,7 @@ volumes:
   postgres_data:
   seaweed_data:
   redis_data:
+
+networks:
+  default:
+    name: camera_traps_net
