@@ -1,3 +1,4 @@
+import random
 from typing import Annotated
 
 from fastapi import Depends, Response
@@ -25,14 +26,18 @@ async def webhook_receiver(
     mime = event.message.new_entry.attributes.mime
     if mime.startswith("image/"):
         # Store input record on database.
-        image_record = ImageInputModel(filename=event.s3_uri, site="1")  # TODO: allow dynamic site
+        image_record = ImageInputModel(
+            filename=event.s3_uri, site=random.choice(["0", "1"])
+        )  # TODO: allow dynamic site
         saved_image = db.add_record(image_record)
         # Send message to queue.
         message = InputMessage(id=saved_image.id, uri=event.s3_uri, name=event.message.new_entry.name)
         await webhook_router.broker.publish(message.model_dump(), stream="image-queue")
     elif mime.startswith("video/"):
         # Store input record on database.
-        video_record = VideoInputModel(filename=event.s3_uri, site="1")  # TODO: allow dynamic site
+        video_record = VideoInputModel(
+            filename=event.s3_uri, site=random.choice(["0", "1"]), duration=float(round(random.uniform(5.0, 20.0), 2))
+        )  # TODO: allow dynamic site and duration
         saved_video = db.add_record(video_record)
         # Send message to queue.
         message = InputMessage(id=saved_video.id, uri=event.s3_uri, name=event.message.new_entry.name)

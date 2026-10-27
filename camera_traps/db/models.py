@@ -74,6 +74,7 @@ class VideoInputModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     site = Column(String, nullable=False)
     filename = Column(String, nullable=False)
+    duration = Column(Float, nullable=False)
     status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     processing_started_at = Column(DateTime(timezone=True), nullable=True)
