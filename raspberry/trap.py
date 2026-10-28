@@ -116,8 +116,20 @@ def main() -> None:
             pir.wait_for_active()
             print("Activity detected by PIR sensor!")
 
-            filepath = capture_video_while_motion(pir)
+            # filepath = capture_video_while_motion(pir)
             # upload_to_seaweed(filepath)
+
+            # filepath = capture_video_while_motion(pir)
+            filepath = "./captures/test_video.mp4"  # Path to your existing test MP4
+
+            print(f"Uploading {filepath} to SeaweedFS...")
+            upload_to_seaweed(filepath)
+            print("Upload completed successfully!")
+
+            # Wait for the PIR sensor to go back to idle before allowing a new trigger
+            print("Waiting for motion to stop...")
+            pir.wait_for_inactive()
+            print("Ready for next trigger!")
 
             time.sleep(1)
 
