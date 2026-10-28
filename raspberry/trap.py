@@ -1,4 +1,5 @@
 import os
+import signal
 import subprocess
 import time
 from datetime import datetime
@@ -10,16 +11,41 @@ from gpiozero import MotionSensor
 
 load_dotenv(Path(__file__).parent / ".env")
 
+SITE = os.getenv("SITE", "0")  # Name of the current site.
 CAPTURE_DIR = os.getenv("CAPTURE_DIR", "./captures")  # Local path for storing videos
 FILER_URL = os.getenv("FILER_URL")  # Seaweed url server for uploading videos
 PIR_PIN = 17  # GPIO 17 (corresponds to physical Pin 11)
-VIDEO_DURATION_MS = 10000
+MAX_VIDEO_DURATION_MS = 30000  # Max duration: 30 seconds.
+GRACE_PERIOD_SEC = 5
+
+
+def get_video_duration(filepath: str) -> float:
+    """Get video duration in seconds."""
+
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            filepath,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=True,
+    )
+
+    return float(result.stdout.strip())
 
 
 def upload_to_seaweed(filepath: str, mime_type: str = "video/mp4") -> None:
     """Uploads a file to seaweed"""
 
-    headers = {"Seaweed-Site": "0", "Seaweed-Duration": "7"}  # TODO  # TODO
+    headers = {"Seaweed-Site": SITE, "Seaweed-Duration": str(round(get_video_duration(filepath)))}
 
     path = Path(filepath)
     with path.open("rb") as f:
@@ -29,20 +55,20 @@ def upload_to_seaweed(filepath: str, mime_type: str = "video/mp4") -> None:
         response.raise_for_status()
 
 
-def capture_video() -> str:
-    """Captures a video"""
+def capture_video_while_motion(pir: MotionSensor) -> str:
+    """Capture video while motion"""
 
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filepath = os.path.join(CAPTURE_DIR, f"trap_{timestamp}.mp4")
+    filepath = os.path.join(CAPTURE_DIR, f"{timestamp}.mp4")
 
-    print(f"Recording {VIDEO_DURATION_MS // 1000}s video...")
+    print(f"Start recording (max {MAX_VIDEO_DURATION_MS // 1000}s)...")
 
-    subprocess.run(
+    process = subprocess.Popen(
         [
             "rpicam-vid",
             "-t",
-            str(VIDEO_DURATION_MS),
+            str(MAX_VIDEO_DURATION_MS),
             "-o",
             filepath,
             "--codec",
@@ -56,28 +82,26 @@ def capture_video() -> str:
             "--autofocus-mode",
             "continuous",
             "--nopreview",
-        ],
-        check=True,
+        ]
     )
 
-    print(f"Video saved: {filepath}")
+    last_motion_time = time.time()
+
+    while process.poll() is None:
+        if pir.is_active:
+            last_motion_time = time.time()
+        else:
+            seconds_without_motion = time.time() - last_motion_time
+            if seconds_without_motion >= GRACE_PERIOD_SEC:
+                print(f"No signal since {GRACE_PERIOD_SEC}s! Stop recording...")
+                process.send_signal(signal.SIGINT)
+                break
+
+        time.sleep(0.2)
+
+    process.wait()
 
     return filepath
-
-
-def on_motion_detected() -> None:
-    """Callback triggered automatically when the PIR sensor detects motion"""
-
-    print("Activity detected by PIR sensor!")
-
-    # filepath = capture_video()
-    # upload_to_seaweed(filepath)
-
-
-def on_motion_stopped() -> None:
-    """Callback triggered when the sensor returns to an idle state"""
-
-    print("Motion stopped. Waiting for next trigger...")
 
 
 def main() -> None:
@@ -85,15 +109,18 @@ def main() -> None:
 
     pir = MotionSensor(PIR_PIN)
 
-    # Bind sensor events to our callback functions
-    pir.when_motion = on_motion_detected
-    pir.when_no_motion = on_motion_stopped
-
     print("PIR sensor active. Listening 24/7 (Press Ctrl+C to stop)...")
 
     try:
         while True:
+            pir.wait_for_active()
+            print("Activity detected by PIR sensor!")
+
+            filepath = capture_video_while_motion(pir)
+            # upload_to_seaweed(filepath)
+
             time.sleep(1)
+
     except KeyboardInterrupt:
         print("Camera trap stopped.")
 
