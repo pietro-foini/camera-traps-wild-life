@@ -19,7 +19,7 @@ CAPTURE_DIR = os.getenv("CAPTURE_DIR", "./captures")
 FILER_URL = os.getenv("FILER_URL")
 PIR_PIN = 17
 MAX_VIDEO_DURATION_SEC = 30
-GRACE_PERIOD_SEC = 5  # Ora può tornare a 5s perché l'avvio è istantaneo!
+GRACE_PERIOD_SEC = 5
 
 
 def get_video_duration(filepath: str) -> float:
@@ -95,6 +95,7 @@ def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H2
 
 def main() -> None:
     print("Initializing Camera (one-time setup)...")
+
     picam2 = Picamera2()
     video_config = picam2.create_video_configuration(
         main={"size": (1920, 1080)},
