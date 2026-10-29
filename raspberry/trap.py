@@ -16,7 +16,7 @@ CAPTURE_DIR = os.getenv("CAPTURE_DIR", "./captures")  # Local path for storing v
 FILER_URL = os.getenv("FILER_URL")  # Seaweed url server for uploading videos
 PIR_PIN = 17  # GPIO 17 (corresponds to physical Pin 11)
 MAX_VIDEO_DURATION_MS = 30000  # Max duration: 30 seconds.
-GRACE_PERIOD_SEC = 5
+GRACE_PERIOD_SEC = 10
 
 
 def get_video_duration(filepath: str) -> float:
@@ -54,6 +54,8 @@ def upload_to_seaweed(filepath: str, mime_type: str = "video/mp4") -> None:
         )
         response.raise_for_status()
 
+    print("File uploaded to seaweed!")
+
 
 def capture_video_while_motion(pir: MotionSensor) -> str:
     """Capture video while motion"""
@@ -78,7 +80,9 @@ def capture_video_while_motion(pir: MotionSensor) -> str:
             "--height",
             "1080",
             "--framerate",
-            "30",
+            "20",
+            "--bitrate",
+            "10000000",
             "--autofocus-mode",
             "continuous",
             "--nopreview",
@@ -116,19 +120,9 @@ def main() -> None:
             pir.wait_for_active()
             print("Activity detected by PIR sensor!")
 
-            # filepath = capture_video_while_motion(pir)
-            # upload_to_seaweed(filepath)
-
-            # filepath = capture_video_while_motion(pir)
-            filepath = "./captures/test_video.mp4"  # Path to your existing test MP4
-
-            print(f"Uploading {filepath} to SeaweedFS...")
+            filepath = capture_video_while_motion(pir)
             upload_to_seaweed(filepath)
-            print("Upload completed successfully!")
 
-            # Wait for the PIR sensor to go back to idle before allowing a new trigger
-            print("Waiting for motion to stop...")
-            pir.wait_for_inactive()
             print("Ready for next trigger!")
 
             time.sleep(1)
