@@ -1,5 +1,5 @@
 import os
-import subprocess
+import shutil
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,65 +15,47 @@ from picamera2.outputs import FfmpegOutput
 load_dotenv(Path(__file__).parent / ".env")
 
 SITE = os.getenv("SITE", "0")
-CAPTURE_DIR = os.getenv("CAPTURE_DIR", "./captures")
+CAPTURE_DIR = os.getenv("CAPTURE_DIR", "/dev/shm/captures")
 FILER_URL = os.getenv("FILER_URL")
 PIR_PIN = 17
 MAX_VIDEO_DURATION_SEC = 30
 GRACE_PERIOD_SEC = 5
 
 
-def get_video_duration(filepath: str) -> float:
-    """Get video duration in seconds."""
-
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            filepath,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=True,
-    )
-
-    return float(result.stdout.strip())
-
-
-def upload_to_seaweed(filepath: str, mime_type: str = "video/mp4") -> None:
+def upload_to_seaweed(filepath: str, duration: float, mime_type: str = "video/mp4") -> bool:
     """Uploads a file to seaweed"""
 
     headers = {
         "Seaweed-Site": SITE,
-        "Seaweed-Duration": str(round(get_video_duration(filepath))),
+        "Seaweed-Duration": str(round(duration)),
     }
     path = Path(filepath)
-    with path.open("rb") as f:
-        response = requests.post(
-            url=f"{FILER_URL}/{path.name}",
-            files={"file": (path.name, f, mime_type)},
-            headers=headers,
-            timeout=120,
-        )
-        response.raise_for_status()
+    try:
+        with path.open("rb") as f:
+            response = requests.post(
+                url=f"{FILER_URL}/{path.name}",
+                files={"file": (path.name, f, mime_type)},
+                headers=headers,
+                timeout=120,
+            )
+            response.raise_for_status()
+        print("File uploaded to seaweed!")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"Error during the uploading: {e}")
+        return False
 
-    print("File uploaded to seaweed!")
 
-
-def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H264Encoder) -> str:
-    """Capture video instantaneously while motion is active"""
+def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H264Encoder) -> tuple[str, float]:
+    """Start up camera, capture video until motion is detected and then turn off camera"""
 
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filepath = os.path.join(CAPTURE_DIR, f"{timestamp}.mp4")
 
-    print(f"Start recording IMMEDIATELY (max {MAX_VIDEO_DURATION_SEC}s)...")
+    picam2.start()
 
+    print(f"Start recording (max {MAX_VIDEO_DURATION_SEC}s)...")
     output = FfmpegOutput(filepath)
     picam2.start_recording(encoder, output)
 
@@ -90,11 +72,15 @@ def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H2
         time.sleep(0.1)
 
     picam2.stop_recording()
-    return filepath
+    duration = time.time() - start_time
+
+    picam2.stop()
+
+    return filepath, duration
 
 
 def main() -> None:
-    print("Initializing Camera (one-time setup)...")
+    print("Initializing Camera configuration...")
 
     picam2 = Picamera2()
     video_config = picam2.create_video_configuration(
@@ -102,20 +88,26 @@ def main() -> None:
         controls={"FrameRate": 20, "AfMode": controls.AfModeEnum.Continuous},
     )
     picam2.configure(video_config)
-    picam2.start()
 
-    encoder = H264Encoder(bitrate=10000000)
+    encoder = H264Encoder(bitrate=5000000)
 
     pir = MotionSensor(PIR_PIN)
-    print(f"Camera & PIR (GPIO {PIR_PIN}) active! Ready for instant recording...")
+    print(f"PIR (GPIO {PIR_PIN}) active! Camera in low-power standby. Waiting for motion...")
 
     try:
         while True:
             pir.wait_for_active()
             print("Activity detected by PIR sensor!")
 
-            filepath = capture_video_while_motion(pir, picam2, encoder)
-            upload_to_seaweed(filepath)
+            filepath, duration = capture_video_while_motion(pir, picam2, encoder)
+
+            upload_to_seaweed(filepath, duration)
+            if upload_to_seaweed(filepath, duration):
+                os.remove(filepath)
+            else:
+                backup_dir = "/backup_videos"
+                os.makedirs(backup_dir, exist_ok=True)
+                shutil.move(filepath, os.path.join(backup_dir, os.path.basename(filepath)))
 
             print("Ready for next trigger!")
             time.sleep(1)
@@ -123,7 +115,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("Camera trap stopped.")
     finally:
-        picam2.stop()
+        picam2.close()
 
 
 if __name__ == "__main__":
