@@ -101,7 +101,6 @@ def main() -> None:
 
             filepath, duration = capture_video_while_motion(pir, picam2, encoder)
 
-            upload_to_seaweed(filepath, duration)
             if upload_to_seaweed(filepath, duration):
                 os.remove(filepath)
             else:
