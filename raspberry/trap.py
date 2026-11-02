@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -10,7 +11,7 @@ from gpiozero import MotionSensor
 from libcamera import controls
 from picamera2 import Picamera2
 from picamera2.encoders import H264Encoder
-from picamera2.outputs import FfmpegOutput
+from picamera2.outputs import FileOutput
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -20,6 +21,7 @@ FILER_URL = os.getenv("FILER_URL")
 PIR_PIN = 17
 MAX_VIDEO_DURATION_SEC = 30
 GRACE_PERIOD_SEC = 5
+FPS = 20
 
 
 def upload_to_seaweed(filepath: str, duration: float, mime_type: str = "video/mp4") -> bool:
@@ -51,12 +53,14 @@ def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H2
 
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filepath = os.path.join(CAPTURE_DIR, f"{timestamp}.mp4")
+    h264_path = os.path.join(CAPTURE_DIR, f"{timestamp}.h264")
+    mp4_path = os.path.join(CAPTURE_DIR, f"{timestamp}.mp4")
 
     picam2.start()
+    time.sleep(0.5)
 
     print(f"Start recording (max {MAX_VIDEO_DURATION_SEC}s)...")
-    output = FfmpegOutput(filepath)
+    output = FileOutput(h264_path)
     picam2.start_recording(encoder, output)
 
     start_time = time.time()
@@ -73,10 +77,17 @@ def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H2
 
     picam2.stop_recording()
     duration = time.time() - start_time
-
     picam2.stop()
 
-    return filepath, duration
+    subprocess.run(
+        ["ffmpeg", "-y", "-framerate", str(FPS), "-i", h264_path, "-c", "copy", mp4_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
+    os.remove(h264_path)
+
+    return mp4_path, duration
 
 
 def main() -> None:
@@ -85,13 +96,14 @@ def main() -> None:
     picam2 = Picamera2()
     video_config = picam2.create_video_configuration(
         main={"size": (1920, 1080)},
-        controls={"FrameRate": 20, "AfMode": controls.AfModeEnum.Continuous},
+        controls={"FrameRate": FPS, "AfMode": controls.AfModeEnum.Continuous},
+        buffer_count=6,
     )
     picam2.configure(video_config)
 
-    encoder = H264Encoder(bitrate=5000000)
+    encoder = H264Encoder(bitrate=5000000, repeat=True)
 
-    pir = MotionSensor(PIR_PIN)
+    pir = MotionSensor(PIR_PIN, queue_len=1)
     print(f"PIR (GPIO {PIR_PIN}) active! Camera in low-power standby. Waiting for motion...")
 
     try:
