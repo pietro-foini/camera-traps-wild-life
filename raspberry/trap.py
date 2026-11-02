@@ -1,6 +1,5 @@
 import os
 import shutil
-import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +10,7 @@ from gpiozero import MotionSensor
 from libcamera import controls
 from picamera2 import Picamera2
 from picamera2.encoders import H264Encoder
-from picamera2.outputs import FileOutput
+from picamera2.outputs import PyavOutput
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -53,14 +52,13 @@ def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H2
 
     os.makedirs(CAPTURE_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    h264_path = os.path.join(CAPTURE_DIR, f"{timestamp}.h264")
     mp4_path = os.path.join(CAPTURE_DIR, f"{timestamp}.mp4")
 
     picam2.start()
     time.sleep(0.5)
 
     print(f"Start recording (max {MAX_VIDEO_DURATION_SEC}s)...")
-    output = FileOutput(h264_path)
+    output = PyavOutput(mp4_path)
     picam2.start_recording(encoder, output)
 
     start_time = time.time()
@@ -79,14 +77,6 @@ def capture_video_while_motion(pir: MotionSensor, picam2: Picamera2, encoder: H2
     duration = time.time() - start_time
     picam2.stop()
 
-    subprocess.run(
-        ["ffmpeg", "-y", "-framerate", str(FPS), "-i", h264_path, "-c", "copy", mp4_path],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
-    os.remove(h264_path)
-
     return mp4_path, duration
 
 
@@ -94,9 +84,13 @@ def main() -> None:
     print("Initializing Camera configuration...")
 
     picam2 = Picamera2()
+    frame_duration_us = int(1_000_000 / FPS)
     video_config = picam2.create_video_configuration(
         main={"size": (1920, 1080)},
-        controls={"FrameRate": FPS, "AfMode": controls.AfModeEnum.Continuous},
+        controls={
+            "FrameDurationLimits": (frame_duration_us, frame_duration_us),
+            "AfMode": controls.AfModeEnum.Continuous,
+        },
         buffer_count=6,
     )
     picam2.configure(video_config)
