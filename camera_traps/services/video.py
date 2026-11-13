@@ -187,7 +187,7 @@ def annotate(
 
     box_annotator = sv.BoxAnnotator(thickness=2, color_lookup=sv.ColorLookup.TRACK)
     label_annotator = sv.LabelAnnotator(
-        text_scale=0.6,
+        text_scale=0.8,
         text_thickness=1,
         color_lookup=sv.ColorLookup.TRACK,
     )
