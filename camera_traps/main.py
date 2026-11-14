@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from trackers import SORTTracker
 
-from camera_traps.api.routes import image_router, video_router
+from camera_traps.api.routes import image_router, video_router, webhook_router
 from camera_traps.db.postgres import PostgresHandler
 from camera_traps.settings import S
 from camera_traps.storage.s3 import S3Storage
@@ -87,3 +87,4 @@ app = FastAPI(title="Camera Traps Wildlife", lifespan=lifespan)
 # Include API routes.
 app.include_router(image_router, tags=["Image"])
 app.include_router(video_router, tags=["Video"])
+app.include_router(webhook_router, tags=["Webhook"])

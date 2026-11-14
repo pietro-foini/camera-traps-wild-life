@@ -4,17 +4,32 @@ services:
     container_name: camera_traps_db
     restart: always
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-      POSTGRES_DB: ${DB_NAME:-camera_traps}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-camera_traps}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: camera_traps_redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
 
   seaweedfs:
@@ -22,14 +37,20 @@ services:
     container_name: camera_traps_storage
     restart: always
     environment:
-      - WEED_NOTIFICATION_WEBHOOK_ENDPOINT=http://app:8000/predict-video
+      - WEED_NOTIFICATION_WEBHOOK_ENDPOINT=http://app:8000/webhook
     ports:
       - "8888:8888"
       - "8333:8333"
-    command: "server -ip=seaweedfs -filer -s3 -dir=/data -volume.max=30"
+    command: "server -ip=seaweedfs -ip.bind=0.0.0.0 -filer -s3 -dir=/data -volume.max=30"
     volumes:
       - ./notification.toml:/etc/seaweedfs/notification.toml:ro
       - seaweed_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z seaweedfs 8333 || exit 1"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
 
   app:
     build:
@@ -41,17 +62,27 @@ services:
       - "8000:8000"
     env_file:
       - ${ENV_FILE:-.env}
+    tty: true
+    stdin_open: true
     environment:
       - DB_HOST=postgres_db
       - S3_ENDPOINT_URL=http://seaweedfs:8333
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ${MODELS_DIR:-./models}:/app/models
     depends_on:
       postgres_db:
         condition: service_healthy
       seaweedfs:
-        condition: service_started
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   seaweed_data:
+  redis_data:
+
+networks:
+  default:
+    name: camera_traps_net

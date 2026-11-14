@@ -26,12 +26,15 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "bucket-cameratraps"
     """bucket name"""
 
+    # Messages
+    REDIS_URL: str
+    """redis url"""
+
     # Models for detection and classification.
     CLASSIFIER_MODEL_PATH: str
     """path to the model used for image classification"""
     DETECTOR_MODEL_PATH: str
     """path to the model used for object detection"""
-
     CLASSIFIER_IMAGE_SIZE: tuple[int, int] = (224, 224)
     """image size used for image classification"""
     DETECTOR_IMAGE_SIZE: tuple[int, int] = (640, 640)
@@ -42,6 +45,10 @@ class Settings(BaseSettings):
     """threshold for keeping classified images"""
     DETECTOR_THRESHOLD: float = 0.8
     """threshold for keeping detected objects"""
+
+    # Video settings.
+    FRAMES_PER_SECOND: int | None = None
+    """frames per second"""
 
 
 S = Settings()  # type: ignore

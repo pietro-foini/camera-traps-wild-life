@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from camera_traps.data import ClassifierClasses
 from camera_traps.models.domain import Predictor
-from camera_traps.models.models import Classification
+from camera_traps.models.schemas import Classification
 
 
 class TFImageClassifier(Predictor):
