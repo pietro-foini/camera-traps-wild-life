@@ -14,9 +14,11 @@ from picamera2.outputs import PyavOutput
 
 load_dotenv(Path(__file__).parent / ".env")
 
-SITE = os.getenv("SITE", "0")
+SITE = os.environ["SITE"]
+LATITUDE = os.environ["LATITUDE"]
+LONGITUDE = os.environ["LONGITUDE"]
+FILER_URL = os.environ["FILER_URL"]
 CAPTURE_DIR = os.getenv("CAPTURE_DIR", "/dev/shm/captures")
-FILER_URL = os.getenv("FILER_URL")
 PIR_PIN = 17
 MAX_VIDEO_DURATION_SEC = 30
 GRACE_PERIOD_SEC = 5
@@ -28,6 +30,8 @@ def upload_to_seaweed(filepath: str, duration: float, mime_type: str = "video/mp
 
     headers = {
         "Seaweed-Site": SITE,
+        "Seaweed-Latitude": str(LATITUDE),
+        "Seaweed-Longitude": str(LONGITUDE),
         "Seaweed-Duration": str(round(duration)),
     }
     path = Path(filepath)

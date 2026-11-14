@@ -27,8 +27,11 @@ async def webhook_receiver(
     if mime.startswith("image/"):
         # Store input record on database.
         image_record = ImageInputModel(
-            filename=event.s3_uri, site=random.choice(["0", "1"])
-        )  # TODO: allow dynamic site
+            filename=event.s3_uri,
+            site=event.message.new_entry.site,
+            latitude=event.message.new_entry.latitude,
+            longitude=event.message.new_entry.longitude,
+        )
         saved_image = db.add_record(image_record)
         # Send message to queue.
         message = InputMessage(id=saved_image.id, uri=event.s3_uri, name=event.message.new_entry.name)
@@ -36,8 +39,12 @@ async def webhook_receiver(
     elif mime.startswith("video/"):
         # Store input record on database.
         video_record = VideoInputModel(
-            filename=event.s3_uri, site=random.choice(["0", "1"]), duration=float(round(random.uniform(5.0, 20.0), 2))
-        )  # TODO: allow dynamic site and duration
+            filename=event.s3_uri,
+            site=event.message.new_entry.site,
+            latitude=event.message.new_entry.latitude,
+            longitude=event.message.new_entry.longitude,
+            duration=event.message.new_entry.duration,
+        )
         saved_video = db.add_record(video_record)
         # Send message to queue.
         message = InputMessage(id=saved_video.id, uri=event.s3_uri, name=event.message.new_entry.name)
