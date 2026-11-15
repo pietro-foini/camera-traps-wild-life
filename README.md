@@ -15,13 +15,13 @@ Example of results applied to generic camera traps (used only for inference purp
 <table width="100%" align="center">
   <tr>
     <td align="center" width="33%">
-      <video src="https://github.com/user-attachments/assets/7d7c73a4-8b10-44aa-9d13-9213bcd3f9a7" width="100%" muted autoplay loop></video>
+      <video src="https://github.com/user-attachments/assets/d258b69b-fdae-4ccb-984a-35c532834c07" width="100%" muted autoplay loop></video>
     </td>
     <td align="center" width="33%">
       <video src="https://github.com/user-attachments/assets/0835d905-6261-4bac-9e07-5fa001099c30" width="100%" muted autoplay loop></video>
     </td>
     <td align="center" width="33%">
-      <video src="https://github.com/user-attachments/assets/492e1d36-7bb2-4476-a63d-aff45f817505" width="100%" muted autoplay loop></video>
+      <video src="https://github.com/user-attachments/assets/dd137250-958d-4faf-b40c-a8fa37c06b89" width="100%" muted autoplay loop></video>
     </td>
   </tr>
 </table>
