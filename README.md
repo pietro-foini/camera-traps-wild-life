@@ -39,6 +39,40 @@ Using Grad-CAM, you can achieve model explainability to observe where the model 
   <em>These images were retrieved from the <a href="https://emammal.si.edu/">eMammals</a> website in reference to the Tierschnappschuss Project based on camera trap locations in Italy.</em>
 </p>
 
+## How It Works 
+
+```mermaid
+flowchart LR
+    A[("SeaweedFS<br/>(input/)")] -->|POST /webhook| B["Webhook Receiver<br/>(FastAPI)"]
+    
+    B -->|MIME: image/*| C[["Redis Stream<br/>(image-queue)"]]
+    B -->|MIME: video/*| D[["Redis Stream<br/>(video-queue)"]]
+    
+    C -->|Consume| E["Image Worker<br/>(/predict-image)"]
+    D -->|Consume| F["Video Worker<br/>(/predict-video)"]
+    
+    E & F -->|Save predictions| G[("PostgreSQL")]
+    F -->|Upload video| H[("SeaweedFS<br/>(output/)")]
+```
+
+The entire infrastructure is designed around an **event-driven pipeline**: whenever a new file is uploaded to the `input/` 
+folder inside the target bucket, [**SeaweedFS**](https://github.com/seaweedfs/seaweedfs) automatically sends an HTTP `POST` 
+notification to the application's `/webhook` endpoint.
+
+The `/webhook` endpoint inspects the file's MIME type and publishes a message to the corresponding [**Redis Stream**]((https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/)) 
+(`image-queue` for images or `video-queue` for videos), which is then consumed asynchronously by the 
+inference subscribers (`/predict-image` and `/predict-video`).
+
+This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
+more information on how SeaweedFS handles event notifications, refer to the official 
+[Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
+
+Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
+webhook endpoint is dynamically overridden to http://app:8000/webhook via `docker-compose.yaml`.
+
+The processed videos and images will be automatically uploaded to the `output/` folder inside the target bucket and
+to the corresponding PostgreSQL tables.
+
 ## Getting Started
 
 You can run this project locally either using **Docker Compose** (for a quick containerized setup) or through a 
@@ -231,39 +265,6 @@ Once the containers are running:
 
 - The Application will be available at http://localhost:8000.
 - SeaweedFS Filer will be available at http://localhost:8888.
-
-## How It Works 
-
-```mermaid
-flowchart LR
-    A[("SeaweedFS<br/>(input/)")] -->|POST /webhook| B["Webhook Receiver<br/>(FastAPI)"]
-    
-    B -->|MIME: image/*| C[["Redis Stream<br/>(image-queue)"]]
-    B -->|MIME: video/*| D[["Redis Stream<br/>(video-queue)"]]
-    
-    C -->|Consume| E["Image Worker<br/>(/predict-image)"]
-    D -->|Consume| F["Video Worker<br/>(/predict-video)"]
-    
-    E & F -->|Save predictions| G[("PostgreSQL")]
-    F -->|Upload video| H[("SeaweedFS<br/>(output/)")]
-```
-
-The entire infrastructure is designed around an **event-driven pipeline**: whenever a new file is uploaded to the `input/` 
-folder inside the target bucket, SeaweedFS automatically sends an HTTP `POST` notification to the application's `/webhook` endpoint.
-
-The `/webhook` endpoint inspects the file's MIME type (ignoring directories) and publishes a message to the corresponding 
-**Redis Stream** (`image-queue` for images or `video-queue` for videos), which is then consumed asynchronously by the 
-inference subscribers (`/predict-image` and `/predict-video`).
-
-This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
-more information on how SeaweedFS handles event notifications, refer to the official 
-[Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
-
-Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
-webhook endpoint is dynamically overridden to http://app:8000/webhook via `docker-compose.yaml`.
-
-The processed videos and images will be automatically uploaded to the `output/` folder inside the target bucket and
-to the corresponding PostgreSQL tables.
 
 -----
 
