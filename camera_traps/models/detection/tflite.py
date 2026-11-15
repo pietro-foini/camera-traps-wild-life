@@ -8,7 +8,7 @@ from ai_edge_litert.interpreter import Interpreter
 
 from camera_traps.data import DetectorClasses
 from camera_traps.models.domain import Predictor
-from camera_traps.models.models import BoundingBox, Detection
+from camera_traps.models.schemas import BoundingBox, Detection
 
 
 class TFLiteImageDetector(Predictor):

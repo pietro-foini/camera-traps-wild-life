@@ -8,7 +8,7 @@ from ai_edge_litert.interpreter import Interpreter
 
 from camera_traps.data import ClassifierClasses
 from camera_traps.models.domain import Predictor
-from camera_traps.models.models import Classification
+from camera_traps.models.schemas import Classification
 
 
 class TFLiteImageClassifier(Predictor):

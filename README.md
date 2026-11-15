@@ -5,10 +5,11 @@
 
 Hello there! 😀
 
-This project was born from the idea of applying such algorithms to camera traps located on my family’s property in a 
-remote area of Italy, where wildlife is frequently observed. The goal was to develop a simple application for fixed 
-camera trap systems, where a basic motion detection algorithm could automatically identify subjects to be analyzed 
-by a fine-tuned machine learning model for image classification.
+This project was born from the idea of applying such algorithms to video footage captured by camera traps located on my 
+family’s property in a remote area of Italy, where wildlife is frequently observed. The goal was to develop a simple 
+application for fixed camera trap systems, where a motion detection system could automatically identify subjects in 
+video footage to be analyzed by a benchmark object detection model and a fine-tuned machine learning model for image 
+classification.
 
 Example of results applied to generic camera traps (used only for inference purposes):
 
@@ -26,7 +27,7 @@ Example of results applied to generic camera traps (used only for inference purp
   </tr>
 </table>
 
-Using Grad-CAM, we achieve model explainability to observe where the model focuses to reach its conclusions:
+Using Grad-CAM, you can achieve model explainability to observe where the model focuses to reach its conclusions:
 
 <p align="center">
   <img src="assets/gradcam_badger.jpg" alt="Grad-CAM Visualization" width="232">
@@ -37,6 +38,40 @@ Using Grad-CAM, we achieve model explainability to observe where the model focus
 <p align="center">
   <em>These images were retrieved from the <a href="https://emammal.si.edu/">eMammals</a> website in reference to the Tierschnappschuss Project based on camera trap locations in Italy.</em>
 </p>
+
+## How It Works 
+
+```mermaid
+flowchart LR
+    A[("SeaweedFS<br/>(input/)")] -->|POST /webhook| B["Webhook Receiver<br/>(FastAPI)"]
+    
+    B -->|MIME: image/*| C[["Redis Stream<br/>(image-queue)"]]
+    B -->|MIME: video/*| D[["Redis Stream<br/>(video-queue)"]]
+    
+    C -->|Consume| E["Image Worker<br/>(/predict-image)"]
+    D -->|Consume| F["Video Worker<br/>(/predict-video)"]
+    
+    E & F -->|Save predictions| G[("PostgreSQL")]
+    F -->|Upload video| H[("SeaweedFS<br/>(output/)")]
+```
+
+The entire infrastructure is designed around an **event-driven pipeline**: whenever a new file is uploaded to the `input/` 
+folder inside the target bucket, [**SeaweedFS**](https://github.com/seaweedfs/seaweedfs) automatically sends an HTTP `POST` 
+notification to the application's `/webhook` endpoint.
+
+The `/webhook` endpoint inspects the file's MIME type and publishes a message to the corresponding [**Redis Stream**]((https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/)) 
+(`image-queue` for images or `video-queue` for videos), which is then consumed asynchronously by the 
+inference subscribers (`/predict-image` and `/predict-video`).
+
+This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
+more information on how SeaweedFS handles event notifications, refer to the official 
+[Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
+
+Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
+webhook endpoint is dynamically overridden to http://app:8000/webhook via `docker-compose.yaml`.
+
+The processed videos and images will be automatically uploaded to the `output/` folder inside the target bucket and
+to the corresponding PostgreSQL tables.
 
 ## Getting Started
 
@@ -168,9 +203,25 @@ S3_ACCESS_KEY=xxxxxxxx
 S3_SECRET_KEY=xxxxxxxx
 ```
 
+#### Message Broker
+
+Message queuing and event streaming are handled by [Redis](https://redis.io/docs/latest/operate/oss_and_stack/install/install-redis/).
+
+- Install and start a local Redis server on the default port (`6379`):
+
+  ```bash
+  redis-server
+  ```
+  
+At the end of this step, add to the environment file the variable referring to Redis. Example:
+
+```
+REDIS_URL=redis://localhost:6379
+```
+
 #### Running the Application
 
-With **PostgreSQL** and **SeaweedFS** running in the background, start the application server:
+With **PostgreSQL**, **SeaweedFS**, and **Redis** running in the background, start the application server:
 
    ```bash
    uvicorn camera_traps.main:app --env-file /path/to/your/local/env --reload
@@ -180,7 +231,7 @@ The Application will be available at http://localhost:8000.
   
 ### Docker Setup
 
-If you prefer running the entire stack (Application, PostgreSQL, and SeaweedFS) in containers, configure your 
+If you prefer running the entire stack (Application, PostgreSQL, SeaweedFS and Redis) in containers, configure your 
 `/path/to/your/local/env` file with the internal container paths for the models (since Docker mounts the models directory 
 to `/app/models`):
 
@@ -188,14 +239,14 @@ to `/app/models`):
 CLASSIFIER_MODEL_PATH=/app/models/classifier.tflite
 DETECTOR_MODEL_PATH=/app/models/detector.tflite
 DB_USER=postgres
-DB_PASSWORD=password
+DB_PASSWORD=xxxxxxxx
 DB_PORT=5432
-DB_NAME=camera_traps
+DB_NAME=cameratraps
 S3_ACCESS_KEY=xxxxxxxx
 S3_SECRET_KEY=xxxxxxxx
 ```
 
-(Note: `DB_HOST` and `S3_ENDPOINT_URL` are automatically set inside `docker-compose.yml`).
+(Note: `DB_HOST`, `S3_ENDPOINT_URL`, and `REDIS_URL` are automatically set inside `docker-compose.yml`).
 
 Run the entire pipeline with a single command:
 
@@ -203,7 +254,7 @@ Run the entire pipeline with a single command:
 ENV_FILE=/path/to/your/local/env MODELS_DIR=/path/to/your/local/models docker compose --env-file /path/to/your/local/env up --build
 ```
 
-Note on defaults: If your environment file is named .env in the project root and your models are stored in ./models, 
+Note on defaults: If your environment file is named `.env` in the project root and your models are stored in `./models`, 
 you can simply run:
 
 ```bash
@@ -214,22 +265,6 @@ Once the containers are running:
 
 - The Application will be available at http://localhost:8000.
 - SeaweedFS Filer will be available at http://localhost:8888.
-
-## How It Works 
-
-The entire infrastructure is designed around an **event-driven pipeline**: whenever a new video (or image, if you modify 
-the configuration) is uploaded to the `input/` folder inside the target  bucket, SeaweedFS automatically triggers the inference 
-pipeline by sending an HTTP `POST` notification to the application's `/predict-video` endpoint.
-
-This mechanism is enabled through the [`notification.toml`](./notification.toml) file located in the project root. For 
-more information on how SeaweedFS handles event notifications, refer to the official 
-[Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
-
-Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
-webhook endpoint is dynamically overridden to http://app:8000/predict-video via `docker-compose.yaml`.
-
-The processed videos (or images) will be automatically uploaded to the `output/` folder inside the target bucket and
-to the corresponding PostgreSQL tables.
 
 -----
 

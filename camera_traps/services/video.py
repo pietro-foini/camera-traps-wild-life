@@ -9,7 +9,7 @@ from trackers.core.base import BaseTracker
 
 from camera_traps.data import ClassifierClasses
 from camera_traps.models.domain import Predictor
-from camera_traps.models.models import BoundingBox, Detection, VideoDetectionResponse
+from camera_traps.models.schemas import BoundingBox, Detection, VideoDetectionResponse
 
 
 def process(
@@ -19,24 +19,19 @@ def process(
     classifier: Predictor,
     tracker: BaseTracker,
     detector_threshold: float = 0.5,
+    target_fps: float | None = None,
 ) -> VideoDetectionResponse:
     """
     Process video stream by running object detection, tracking, and crop classification frame by frame.
 
     :param filename: name of the video file
-    :type filename: str
     :param video_bytes: raw bytes of the video file
-    :type video_bytes: bytes
     :param detector: object detector model instance
-    :type detector: Predictor
     :param classifier: crop classifier model instance
-    :type classifier: Predictor
     :param tracker: object tracker instance
-    :type tracker: BaseTracker
     :param detector_threshold: minimum confidence threshold for object detection
-    :type detector_threshold: float
+    :param target_fps: target frames per second
     :return: response payload containing frame-by-frame object detections and tracking results
-    :rtype: VideoDetectionResponse
     """
 
     # Open video file.
@@ -46,9 +41,17 @@ def process(
     response = VideoDetectionResponse(filename=filename)
 
     try:
+        video_stream = container.streams.video[0]
+
+        orig_fps = float(video_stream.average_rate or video_stream.guessed_rate or 30)
+        step = max(1, round(orig_fps / target_fps)) if target_fps else 1
+
         stream = container.decode(video=0)
 
-        for frame_id, frame in enumerate(tqdm(stream, total=container.streams.video[0].frames, unit="frame")):
+        for frame_id, frame in enumerate(tqdm(stream, total=video_stream.frames, unit="frame")):
+            if frame_id % step != 0:
+                continue
+
             frame_np = frame.to_ndarray(format="rgb24")
 
             # Run detector.
@@ -113,11 +116,8 @@ def smooth(response: VideoDetectionResponse, threshold: float) -> VideoDetection
     Consolidate tracking labels by selecting the most confident class per track.
 
     :param response: input containing video predictions
-    :type response: VideoDetectionResponse
     :param threshold: minimum confidence threshold for score aggregation
-    :type threshold: Any
     :return: processed video predictions with consolidated labels and re-indexed tracking IDs
-    :rtype: VideoDetectionResponse
     """
 
     if not response.predictions:
@@ -155,33 +155,39 @@ def smooth(response: VideoDetectionResponse, threshold: float) -> VideoDetection
     return VideoDetectionResponse(filename=response.filename, predictions=smoothed_predictions)
 
 
-def annotate(video_bytes: bytes, response: VideoDetectionResponse) -> bytes:
+def annotate(
+    video_bytes: bytes,
+    response: VideoDetectionResponse,
+    target_fps: float | None = None,
+) -> bytes:
     """
     Annotate video frames with bounding boxes and labels entirely in memory.
 
     :param video_bytes: raw bytes of the input video file
-    :type video_bytes: bytes
     :param response: video predictions containing detections and tracking IDs
-    :type response: VideoDetectionResponse
+    :param target_fps: target frames per second
     :return: raw bytes of the annotated MP4 video
-    :rtype: bytes
     """
 
     in_container = av.open(io.BytesIO(video_bytes))
     in_stream = in_container.streams.video[0]
 
+    orig_fps = float(in_stream.average_rate or in_stream.guessed_rate or 30)
+    step = max(1, round(orig_fps / target_fps)) if target_fps else 1
+    out_fps = round(orig_fps / step) if target_fps else (in_stream.average_rate or 30)
+
     out_buffer = io.BytesIO()
     out_container = av.open(out_buffer, mode="w", format="mp4")
 
-    out_stream = out_container.add_stream("libx264", rate=in_stream.average_rate or 30)
+    out_stream = out_container.add_stream("libx264", rate=out_fps)
     out_stream.width = in_stream.codec_context.width
     out_stream.height = in_stream.codec_context.height
     out_stream.pix_fmt = "yuv420p"
-    out_stream.options = {"preset": "ultrafast", "movflags": "+faststart"}
+    out_stream.options = {"preset": "ultrafast"}
 
     box_annotator = sv.BoxAnnotator(thickness=2, color_lookup=sv.ColorLookup.TRACK)
     label_annotator = sv.LabelAnnotator(
-        text_scale=0.6,
+        text_scale=0.8,
         text_thickness=1,
         color_lookup=sv.ColorLookup.TRACK,
     )
@@ -194,6 +200,9 @@ def annotate(video_bytes: bytes, response: VideoDetectionResponse) -> bytes:
         for frame_id, frame in enumerate(
             tqdm(in_container.decode(video=0), total=in_container.streams.video[0].frames, unit="frame")
         ):
+            if frame_id % step != 0:
+                continue
+
             frame_bgr = frame.to_ndarray(format="bgr24")
             frame_predictions = predictions_by_frame.get(frame_id, [])
 
