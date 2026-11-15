@@ -1,7 +1,6 @@
 # Camera-Traps-Wild-Life
 
 [![GitHub Release](https://img.shields.io/github/v/tag/pietro-foini/camera-traps-wild-life?label=version)](https://github.com/pietro-foini/camera-traps-wild-life/releases)
-[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen.svg)](https://app-camera-traps-wildlife-latest.onrender.com/)
 
 Hello there! 😀
 
@@ -16,13 +15,13 @@ Example of results applied to generic camera traps (used only for inference purp
 <table width="100%" align="center">
   <tr>
     <td align="center" width="33%">
-      <video src="https://github.com/user-attachments/assets/f903c4a7-a3cb-48b9-8807-4d2c9d73d5d4" width="100%" muted autoplay loop></video>
+      <video src="https://github.com/user-attachments/assets/d258b69b-fdae-4ccb-984a-35c532834c07" width="100%" muted autoplay loop></video>
     </td>
     <td align="center" width="33%">
-      <video src="https://github.com/user-attachments/assets/4f40051a-4307-4f2d-987a-77a2167c8220" width="100%" muted autoplay loop></video>
+      <video src="https://github.com/user-attachments/assets/0835d905-6261-4bac-9e07-5fa001099c30" width="100%" muted autoplay loop></video>
     </td>
     <td align="center" width="33%">
-      <video src="https://github.com/user-attachments/assets/7968e2a3-fbf9-4bf2-966d-ab31f4e82518" width="100%" muted autoplay loop></video>
+      <video src="https://github.com/user-attachments/assets/dd137250-958d-4faf-b40c-a8fa37c06b89" width="100%" muted autoplay loop></video>
     </td>
   </tr>
 </table>
