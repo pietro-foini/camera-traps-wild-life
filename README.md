@@ -1,7 +1,6 @@
 # Camera-Traps-Wild-Life
 
 [![GitHub Release](https://img.shields.io/github/v/tag/pietro-foini/camera-traps-wild-life?label=version)](https://github.com/pietro-foini/camera-traps-wild-life/releases)
-[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen.svg)](https://app-camera-traps-wildlife-latest.onrender.com/)
 
 Hello there! 😀
 
