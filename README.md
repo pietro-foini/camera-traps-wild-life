@@ -66,9 +66,6 @@ This mechanism is enabled through the [`notification.toml`](./notification.toml)
 more information on how SeaweedFS handles event notifications, refer to the official 
 [Filer Notification Webhook documentation](https://github.com/seaweedfs/seaweedfs/wiki/Filer-Notification-Webhook).
 
-Note: In the Docker Setup, the `notification.toml` file is automatically mounted into the storage container, and the 
-webhook endpoint is dynamically overridden to http://app:8000/webhook via `docker-compose.yaml`.
-
 The processed videos and images will be automatically uploaded to the `output/` folder inside the target bucket and
 to the corresponding PostgreSQL tables.
 
@@ -359,6 +356,84 @@ List of sources:
 - UKCEH: https://catalogue.ceh.ac.uk/documents/bf82cec2-5f8a-407c-bf74-f8689ca35e83
 - MOF: https://github.com/umr-ds/Mammal-Bird-Camera-Trap-Recognition/blob/main/data/data_download.sh
 - BNP: https://github.com/umr-ds/Mammal-Bird-Camera-Trap-Recognition/blob/main/data/data_download.sh
+
+## Classification Setup
+
+The classification engine is based on the modern **ConvNeXtBase** architecture, chosen for its strong inductive bias and 
+high representational capacity on complex natural images. Training was conducted end-to-end using a multi-stage transfer 
+learning procedure.
+
+### 1. Preprocessing
+
+* **Stratification:** The dataset was split into training (**80%**) and test sets (**20%**) using multi-label stratification 
+    on `label`, `time` (day/night), and `dataset` source to ensure identical class distributions and environmental 
+    representations across splits.
+* **Augmentation:** Inputs were resized to $224 \times 224 \times 3$. Real-time on-the-fly data augmentation was applied during training 
+    using random horizontal flips, rotation, random contrast adjustment, and brightness perturbations to minimize overfitting 
+    to specific camera sensor artifacts.
+
+### 2. Training
+
+Training followed a progressive transfer learning and fine-tuning strategy:
+
+1. **Transfer Learning:**
+   * The backbone `ConvNeXtBase` (pre-trained on ImageNet-1k) was frozen.
+   * A custom classification head was appended.
+   * Trained with the **Adam** optimizer using `sparse_categorical_crossentropy` for 10 epochs.
+
+2. **Fine-Tuning:**
+   * The final computational blocks were unfrozen to adapt high-level feature representations to wildlife morphology and night-vision IR textures.
+   * Re-compiled using **AdamW** with a conservative learning rate and decoupled weight decay.
+   * Trained with `EarlyStopping` (monitoring `val_loss`, patience 5) to prevent catastrophic forgetting and overfitting.
+
+### 3. Evaluation
+
+Evaluated on the held-out test set (no validation set has been used for hyperparameter tuning).
+
+#### Classification Metrics
+
+| Class                 | Precision | Recall | F1-Score | Support |
+|:----------------------|:---------:|:------:|:--------:|:-------:|
+| **human**             |   1.00    |  1.00  | **1.00** |   965   |
+| **vehicle**           |   1.00    |  1.00  | **1.00** |   527   |
+| **bird**              |   0.98    |  0.98  | **0.98** |   463   |
+| **cow**               |   1.00    |  1.00  | **1.00** |   949   |
+| **fox**               |   0.99    |  0.98  | **0.98** |   664   |
+| **hare**              |   0.99    |  1.00  | **0.99** |   890   |
+| **dog**               |   0.99    |  0.99  | **0.99** |  1650   |
+| **cat**               |   0.99    |  0.99  | **0.99** |  1526   |
+| **None_of_the_above** |   0.99    |  0.98  | **0.99** |   887   |
+| **weasel**            |   1.00    |  0.99  | **0.99** |   873   |
+| **bear**              |   0.99    |  1.00  | **0.99** |   924   |
+| **deer**              |   1.00    |  1.00  | **1.00** |  1745   |
+| **badger**            |   0.99    |  0.99  | **0.99** |   446   |
+| **squirrel**          |   0.99    |  1.00  | **0.99** |   539   |
+| **wolf**              |   0.98    |  0.99  | **0.99** |   628   |
+| **boar**              |   0.99    |  0.98  | **0.99** |  1170   |
+
+#### Confusion Matrix
+
+| True \ Pred  |  human  | vehicle |  bird   |   cow   |   fox   |  hare   |   dog    |   cat    |  None   | weasel  |  bear   |   deer   | badger  | squirrel |  wolf   |   boar   | Total |
+|:-------------|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:--------:|:--------:|:-------:|:-------:|:-------:|:--------:|:-------:|:--------:|:-------:|:--------:|:-----:|
+| **human**    | **965** |    0    |    0    |    0    |    0    |    0    |    0     |    0     |    0    |    0    |    0    |    0     |    0    |    0     |    0    |    0     |  965  |
+| **vehicle**  |    0    | **525** |    1    |    0    |    0    |    0    |    0     |    1     |    0    |    0    |    0    |    0     |    0    |    0     |    0    |    0     |  527  |
+| **bird**     |    0    |    0    | **456** |    0    |    0    |    1    |    0     |    1     |    2    |    1    |    0    |    0     |    0    |    2     |    0    |    0     |  463  |
+| **cow**      |    0    |    0    |    0    | **946** |    0    |    0    |    0     |    0     |    0    |    0    |    1    |    2     |    0    |    0     |    0    |    0     |  949  |
+| **fox**      |    0    |    0    |    0    |    0    | **651** |    1    |    2     |    0     |    1    |    0    |    2    |    1     |    0    |    1     |    4    |    1     |  664  |
+| **hare**     |    0    |    0    |    2    |    0    |    0    | **886** |    0     |    1     |    0    |    0    |    0    |    0     |    0    |    0     |    0    |    1     |  890  |
+| **dog**      |    0    |    0    |    0    |    1    |    1    |    0    | **1637** |    5     |    0    |    0    |    2    |    0     |    0    |    1     |    1    |    1     | 1650  |
+| **cat**      |    0    |    0    |    0    |    0    |    5    |    0    |    3     | **1514** |    0    |    0    |    0    |    1     |    0    |    1     |    0    |    2     | 1526  |
+| **None**     |    1    |    0    |    2    |    2    |    0    |    1    |    1     |    3     | **871** |    0    |    1    |    1     |    0    |    1     |    0    |    3     |  887  |
+| **weasel**   |    0    |    0    |    1    |    0    |    0    |    1    |    2     |    0     |    0    | **865** |    0    |    0     |    2    |    1     |    1    |    0     |  873  |
+| **bear**     |    0    |    0    |    0    |    0    |    1    |    0    |    0     |    0     |    0    |    0    | **923** |    0     |    0    |    0     |    0    |    0     |  924  |
+| **deer**     |    0    |    0    |    0    |    0    |    0    |    1    |    0     |    1     |    0    |    0    |    0    | **1737** |    0    |    0     |    3    |    3     | 1745  |
+| **badger**   |    0    |    0    |    0    |    0    |    0    |    0    |    1     |    0     |    0    |    0    |    0    |    0     | **443** |    0     |    1    |    1     |  446  |
+| **squirrel** |    0    |    0    |    1    |    0    |    0    |    0    |    0     |    0     |    0    |    0    |    0    |    0     |    0    | **538**  |    0    |    0     |  539  |
+| **wolf**     |    0    |    0    |    1    |    0    |    0    |    0    |    2     |    1     |    1    |    0    |    2    |    0     |    0    |    0     | **621** |    0     |  628  |
+| **boar**     |    0    |    0    |    1    |    1    |    0    |    1    |    3     |    3     |    1    |    0    |    4    |    2     |    0    |    0     |    2    | **1152** | 1170  |
+
+> **Note:** For complete reproducible source code, data loading routines, training logs, Grad-CAM visualization implementations, 
+> and confusion matrix displays, refer to the dedicated Jupyter notebooks located in the [`notebooks/`](./notebooks) directory.
 
 ## License
 
