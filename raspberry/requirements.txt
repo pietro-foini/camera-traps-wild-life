@@ -1,3 +1,5 @@
 gpiozero==2.0.1
 requests==2.34.2
 python-dotenv
+victron-ble
+bleak

@@ -10,6 +10,7 @@ locally as a backup.
 - Camera module (connected to the Pi)
 - PIR motion sensor (connected to GPIO 17)
 - A reachable SeaweedFS filer
+- Victron SmartSolar MPPT charge controller (optional, for BLE solar/battery telemetry)
 
 > **Note:** the camera and the PIR sensor must be physically connected to the Raspberry Pi before running the script.
 
@@ -41,7 +42,7 @@ git clone https://github.com/pietro-foini/camera-traps-wild-life
 ## 4. Install system dependencies
 
 ```bash
-sudo apt install -y python3-picamera2 python3-libcamera python3-gpiozero python3-lgpio ffmpeg libcap-dev
+sudo apt install -y python3-picamera2 python3-libcamera python3-gpiozero python3-lgpio ffmpeg libcap-dev bluez tmux
 ```
 
 ## 5. Create the Python virtual environment
@@ -61,14 +62,7 @@ pip install -r requirements.txt
 
 ## 6. Configure environment variables
 
-Create a `.env` file in the same folder as `trap.py`:
-
-```env
-SITE=<site-name>
-LATITUDE=<latitude>
-LONGITUDE=<longitude>
-FILER_URL=<seaweedfs-filer-url>
-```
+Create a `.env` file in the same folder as `trap.py` and `victron.py`:
 
 | Variable      | Required | Description                                          |
 |---------------|----------|------------------------------------------------------|
@@ -76,11 +70,20 @@ FILER_URL=<seaweedfs-filer-url>
 | `LATITUDE`    | Yes      | Latitude of the camera trap                          |
 | `LONGITUDE`   | Yes      | Longitude of the camera trap                         |
 | `FILER_URL`   | Yes      | URL of the SeaweedFS filer used for uploads          |
+| `VICTRON_MAC` | Yes      | Bluetooth MAC address of the Victron SmartSolar      |
+| `VICTRON_KEY` | Yes      | Instant Readout key from the VictronConnect app      |
 
-## 7. Run the script
+
+## 7. Run the scripts
 
 ```bash
 python3 trap.py
+```
+
+or
+
+```bash
+python3 victron.py
 ```
 
 ## How it works
